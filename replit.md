@@ -13,8 +13,8 @@ This is a **npm monorepo** using npm workspaces with the following packages:
 - **`packages/android`** — Native Android app using Kotlin + Jetpack Compose (not included in Replit workflows)
 
 ## Tech Stack
-- **Frontend:** Vite 5, TypeScript, WebRTC Data Channels
-- **UI:** Canvas radar, jsQR camera scanner, glassmorphism settings panel
+- **Frontend:** Vite 5, TypeScript, WebRTC Data Channels, WebRTC media tracks
+- **UI:** Canvas radar, jsQR camera scanner, enlarged QR pairing, click-to-copy pairing links, glassmorphism settings panel
 - **Signaling Server:** Node.js, `ws` (WebSockets)
 - **Crypto:** ECDH P-256 key exchange, AES-256-GCM encryption, SHA-256 integrity
 - **Discovery:** BroadcastChannel (same-origin tabs), WebSocket signaling (cross-network), mDNS/NSD (LAN - desktop/Android only)
@@ -33,11 +33,19 @@ npm run dev:web          # Start web dev server (port 5000)
 npm run dev:signaling    # Start signaling server (port 3001)
 ```
 
+## Current Web Features
+- Radar-style peer discovery UI with animated canvas scanning and proximity-mapped device nodes.
+- QR pairing modal powered by `jsQR` and enlarged QR generation for easier scanning.
+- Short compact `#p=` pairing URLs with click-to-copy behavior on the pairing link.
+- P2P file transfer over encrypted WebRTC Data Channels.
+- P2P media room controls for voice, video, and screen sharing between selected peers.
+- Settings for save-location UI, Arabic/English language, stealth mode, and dark/light mode.
+
 ## Replit Migration Status
 - Dependencies have been installed for the npm workspace.
 - The Replit workflows run the web app and signaling server separately.
 - Vite is configured for Replit preview access with `host: '0.0.0.0'` and `allowedHosts: true`.
-- The web UI includes a radar device view, a Scan QR camera modal backed by `jsQR`, and settings for save location UI, Arabic/English language, and dark/light mode.
+- The web UI includes radar discovery, QR scan/connect, compact copyable pairing links, and P2P media controls.
 
 ## Deployment
 - Configured as a **static** deployment
@@ -48,6 +56,7 @@ npm run dev:signaling    # Start signaling server (port 3001)
 ## How It Works
 1. Each browser tab gets a unique device identity stored in sessionStorage
 2. Same-origin tabs discover each other via BroadcastChannel
-3. Cross-network peers use the WebSocket signaling server (pass `?signaling=ws://...` in URL)
-4. WebRTC Data Channels handle the actual file transfer
-5. Files are encrypted end-to-end with ECDH + AES-256-GCM
+3. Cross-network peers use the WebSocket signaling server through compact QR/link pairing
+4. WebRTC Data Channels handle encrypted file transfer
+5. WebRTC media tracks handle selected-peer voice, video, and screen sharing
+6. Files are encrypted end-to-end with ECDH + AES-256-GCM

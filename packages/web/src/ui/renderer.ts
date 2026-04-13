@@ -14,6 +14,8 @@ interface UICallbacks {
   onFilesSelected: (files: FileList | File[], peerId: string) => void;
   onPeerClick: (peerId: string) => void;
   onQRScanned: (data: string) => void;
+  onStartMedia: (peerId: string, mode: 'voice' | 'video' | 'screen') => void;
+  onStopMedia: (peerId: string) => void;
 }
 
 interface PeerEntry {
@@ -55,6 +57,13 @@ const i18n: Record<string, Record<string, string>> = {
     scannerStarting: 'Starting camera...',
     scannerCameraError: 'Camera access failed. Check browser permissions.',
     scannerFound: 'QR detected — connecting...',
+    copied: 'Copied',
+    mediaRoom: 'P2P Room',
+    voice: 'Voice',
+    video: 'Video',
+    screen: 'Screen',
+    stopMedia: 'Stop',
+    choosePeerMedia: 'Select a radar device to start voice, video, or screen sharing',
     shareLink: 'Share this link:',
     footer: 'Files are transferred directly between devices — no server involved',
     settings: 'Settings',
@@ -102,6 +111,13 @@ const i18n: Record<string, Record<string, string>> = {
     scannerStarting: 'جاري تشغيل الكاميرا...',
     scannerCameraError: 'تعذر فتح الكاميرا. تحقق من صلاحيات المتصفح.',
     scannerFound: 'تم العثور على الرمز — جاري الاتصال...',
+    copied: 'تم النسخ',
+    mediaRoom: 'غرفة P2P',
+    voice: 'صوت',
+    video: 'فيديو',
+    screen: 'الشاشة',
+    stopMedia: 'إيقاف',
+    choosePeerMedia: 'اختر جهازاً من الرادار لبدء الصوت أو الفيديو أو مشاركة الشاشة',
     shareLink: 'شارك هذا الرابط:',
     footer: 'يتم نقل الملفات مباشرة بين الأجهزة — بدون خادم',
     settings: 'الإعدادات',
@@ -709,6 +725,22 @@ export function renderUI(identity: DeviceIdentity, cbs: UICallbacks): void {
           </div>
         </section>
 
+        <section class="media-section">
+          <h2>${t('mediaRoom')}</h2>
+          <div class="media-controls">
+            <button class="media-btn" data-media-mode="voice" disabled>${t('voice')}</button>
+            <button class="media-btn" data-media-mode="video" disabled>${t('video')}</button>
+            <button class="media-btn" data-media-mode="screen" disabled>${t('screen')}</button>
+            <button class="media-btn media-stop" id="media-stop-btn" disabled>${t('stopMedia')}</button>
+          </div>
+          <p class="media-hint" id="media-hint">${t('choosePeerMedia')}</p>
+          <div class="media-room" id="media-room" style="display:none">
+            <video id="remote-media" autoplay playsinline></video>
+            <video id="local-media" autoplay playsinline muted></video>
+            <p id="media-label"></p>
+          </div>
+        </section>
+
         <section class="transfers-section" id="transfers-section" style="display:none">
           <h2>${t('transfers')}</h2>
           <div id="transfers-list" class="transfers-list"></div>
@@ -771,6 +803,25 @@ export function renderUI(identity: DeviceIdentity, cbs: UICallbacks): void {
 
   document.getElementById('scan-qr-btn')?.addEventListener('click', () => {
     void openQRScanner();
+  });
+
+  document.getElementById('pairing-url')?.addEventListener('click', async (event) => {
+    const text = (event.currentTarget as HTMLElement).textContent ?? '';
+    if (!text) return;
+    await navigator.clipboard.writeText(text);
+    showNotification(t('copied'), 'success');
+  });
+
+  document.querySelectorAll('.media-btn[data-media-mode]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!selectedPeerId) return;
+      const mode = (btn as HTMLElement).dataset.mediaMode as 'voice' | 'video' | 'screen';
+      callbacks.onStartMedia(selectedPeerId, mode);
+    });
+  });
+
+  document.getElementById('media-stop-btn')?.addEventListener('click', () => {
+    if (selectedPeerId) callbacks.onStopMedia(selectedPeerId);
   });
 
   // Listen for system theme changes
@@ -843,6 +894,7 @@ function renderRadarDevices(): void {
       const peerId = (el as HTMLElement).dataset.peerId!;
       selectedPeerId = peerId;
       callbacks.onPeerClick(peerId);
+      updateMediaButtons();
 
       // Update selection visuals
       container.querySelectorAll('.radar-device').forEach(d => d.classList.remove('selected'));
@@ -858,6 +910,13 @@ function renderRadarDevices(): void {
   });
 }
 
+function updateMediaButtons(): void {
+  const enabled = Boolean(selectedPeerId);
+  document.querySelectorAll<HTMLButtonElement>('.media-btn').forEach(btn => {
+    btn.disabled = !enabled;
+  });
+}
+
 export function updatePeerList(peers: Array<{ id: string; device: DeviceIdentity; connected: boolean }>): void {
   // Assign signal strength and angles
   currentPeers = peers.map((peer, idx) => {
@@ -870,6 +929,25 @@ export function updatePeerList(peers: Array<{ id: string; device: DeviceIdentity
   });
 
   renderRadarDevices();
+  updateMediaButtons();
+}
+
+export function updateMediaRoom(
+  localStream: MediaStream | null,
+  remoteStream: MediaStream | null,
+  mode: 'voice' | 'video' | 'screen' | null,
+  peerName: string
+): void {
+  const room = document.getElementById('media-room');
+  const localVideo = document.getElementById('local-media') as HTMLVideoElement | null;
+  const remoteVideo = document.getElementById('remote-media') as HTMLVideoElement | null;
+  const label = document.getElementById('media-label');
+  if (!room || !localVideo || !remoteVideo || !label) return;
+
+  localVideo.srcObject = localStream;
+  remoteVideo.srcObject = remoteStream;
+  room.style.display = localStream || remoteStream ? 'grid' : 'none';
+  label.textContent = mode ? `${mode.toUpperCase()} · ${peerName}` : '';
 }
 
 /* ═══════════════════════════════════════

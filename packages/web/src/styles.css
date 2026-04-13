@@ -1194,6 +1194,84 @@ section h2::after {
   box-shadow: var(--shadow-glow);
 }
 
+.media-section {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  backdrop-filter: blur(14px);
+}
+
+.media-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.media-btn {
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border-radius: 999px;
+  padding: 0.55rem 0.9rem;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.media-btn:not(:disabled):hover {
+  border-color: var(--accent);
+  color: var(--accent-light);
+  box-shadow: var(--shadow-glow);
+}
+
+.media-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.media-stop {
+  color: var(--error);
+}
+
+.media-hint {
+  margin-top: 0.65rem;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.media-room {
+  margin-top: 0.9rem;
+  display: grid;
+  grid-template-columns: 1fr 150px;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.media-room video {
+  width: 100%;
+  min-height: 110px;
+  background: #000;
+  border: 1px solid var(--border-hover);
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+}
+
+#local-media {
+  min-height: 82px;
+}
+
+#media-label {
+  grid-column: 1 / -1;
+  color: var(--accent-light);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 /* ═══════════════════════════════════════
    SETTINGS PANEL (Glassmorphism)
    ═══════════════════════════════════════ */

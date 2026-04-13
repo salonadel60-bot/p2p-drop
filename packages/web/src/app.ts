@@ -18,8 +18,6 @@ import {
   FileSender,
   FileReceiver,
   generatePairingInfo,
-  generatePairingURL,
-  generateQRData,
   parsePairingURL,
   parseQRData,
 } from '@p2p-drop/core';
@@ -32,7 +30,7 @@ import {
 } from './webrtc/index.js';
 import type { RTCSignalingMessage } from './webrtc/index.js';
 import { BrowserFileSource, BrowserFileSink, computeFileSHA256 } from './ui/file-handler.js';
-import { renderUI, updatePeerList, updateTransferProgress, showNotification, addTransferEntry, updateTransferState } from './ui/renderer.js';
+import { renderUI, updatePeerList, updateTransferProgress, showNotification, addTransferEntry, updateTransferState, updateMediaRoom } from './ui/renderer.js';
 
 interface PeerState {
   device: DeviceIdentity;
@@ -46,6 +44,10 @@ class P2PDropApp {
   private wsSignaling: WebSocketSignaling | null = null;
   private peers = new Map<string, PeerState>();
   private activeTransfers = new Map<string, { sender?: FileSender; receiver?: FileReceiver; sink?: BrowserFileSink }>();
+  private mediaConnections = new Map<string, RTCPeerConnection>();
+  private localMediaStream: MediaStream | null = null;
+  private remoteMediaStreams = new Map<string, MediaStream>();
+  private mediaMode: 'voice' | 'video' | 'screen' | null = null;
 
   async init(): Promise<void> {
     // Get or create device identity
@@ -56,6 +58,8 @@ class P2PDropApp {
       onFilesSelected: (files, peerId) => this.sendFiles(files, peerId),
       onPeerClick: (peerId) => this.connectToPeer(peerId),
       onQRScanned: (data) => this.handleQRScanned(data),
+      onStartMedia: (peerId, mode) => this.startMedia(peerId, mode),
+      onStopMedia: (peerId) => this.stopMedia(peerId),
     });
 
     // Start local signaling (BroadcastChannel for same-origin tabs)
@@ -118,12 +122,22 @@ class P2PDropApp {
   }
 
   private setupPairing(): void {
+    const signalingUrl = this.getSignalingURL();
     const pairingInfo = generatePairingInfo(
       this.identity,
-      window.location.href,
+      signalingUrl,
       30
     );
-    const pairingURL = generatePairingURL(window.location.origin, pairingInfo);
+    const payload = {
+      p2pd: 1,
+      d: pairingInfo.device.deviceId,
+      n: pairingInfo.device.deviceName,
+      e: signalingUrl,
+      c: pairingInfo.pairingCode,
+      x: pairingInfo.expiresAt,
+    };
+    const encoded = this.encodePairingPayload(payload);
+    const pairingURL = `${window.location.origin}${window.location.pathname}#p=${encoded}`;
 
     // Display pairing URL in the UI
     const pairingElement = document.getElementById('pairing-url');
@@ -131,9 +145,7 @@ class P2PDropApp {
       pairingElement.textContent = pairingURL;
     }
 
-    // Generate QR code with embedded signaling URL for auto-connect
-    const qrData = generateQRData({ ...pairingInfo, endpoint: this.getSignalingURL() });
-    this.generateQRCode(qrData);
+    this.generateQRCode(`p2pd:${encoded}`);
   }
 
   private async generateQRCode(data: string): Promise<void> {
@@ -143,8 +155,10 @@ class P2PDropApp {
     try {
       const QRCode = await import('qrcode');
       await QRCode.toCanvas(canvas, data, {
-        width: 200,
-        margin: 2,
+        width: 260,
+        scale: 10,
+        margin: 3,
+        errorCorrectionLevel: 'M',
         color: { dark: '#1a1a2e', light: '#ffffff' },
       });
     } catch {
@@ -154,7 +168,7 @@ class P2PDropApp {
 
   private handleQRScanned(raw: string): void {
     // Try compact QR data format first (p2pd JSON)
-    let parsed = parseQRData(raw);
+    let parsed = this.parseCompactPairing(raw) ?? parseQRData(raw);
     if (!parsed) {
       // Try URL format (#pair=base64)
       const fromURL = parsePairingURL(raw);
@@ -206,6 +220,37 @@ class P2PDropApp {
     showNotification(`Joined network — ${parsed.deviceName} should appear on radar`, 'success');
   }
 
+  private encodePairingPayload(payload: { p2pd: number; d: string; n: string; e: string; c: string; x: string }): string {
+    const bytes = new TextEncoder().encode(JSON.stringify(payload));
+    let binary = '';
+    bytes.forEach(byte => { binary += String.fromCharCode(byte); });
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  private parseCompactPairing(raw: string): { deviceId: string; deviceName: string; endpoint: string; pairingCode: string; expiresAt: string } | null {
+    const value = raw.startsWith('p2pd:')
+      ? raw.slice(5)
+      : raw.includes('#p=')
+        ? raw.split('#p=')[1]
+        : '';
+    if (!value) return null;
+    try {
+      const normalized = value.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(value.length / 4) * 4, '=');
+      const bytes = Uint8Array.from(atob(normalized), char => char.charCodeAt(0));
+      const parsed = JSON.parse(new TextDecoder().decode(bytes)) as { p2pd?: number; d?: string; n?: string; e?: string; c?: string; x?: string };
+      if (parsed.p2pd !== 1 || !parsed.d || !parsed.e || !parsed.c || !parsed.x) return null;
+      return {
+        deviceId: parsed.d,
+        deviceName: parsed.n ?? 'Unknown',
+        endpoint: parsed.e,
+        pairingCode: parsed.c,
+        expiresAt: parsed.x,
+      };
+    } catch {
+      return null;
+    }
+  }
+
   private handlePeerJoined(device: DeviceIdentity, peerId: string): void {
     if (this.peers.has(peerId)) return;
 
@@ -240,6 +285,11 @@ class P2PDropApp {
   }
 
   private async handleSignalingMessage(from: string, msg: RTCSignalingMessage): Promise<void> {
+    if (msg.fileTransferId === 'media') {
+      await this.handleMediaSignaling(from, msg);
+      return;
+    }
+
     let peer = this.peers.get(from);
 
     // If we receive an offer from an unknown peer, we need to create the connection
@@ -308,6 +358,89 @@ class P2PDropApp {
     }
 
     await peer.connection!.createOffer();
+  }
+
+  private async startMedia(peerId: string, mode: 'voice' | 'video' | 'screen'): Promise<void> {
+    const peer = this.peers.get(peerId);
+    if (!peer) {
+      showNotification('Select a peer first', 'error');
+      return;
+    }
+
+    this.localMediaStream?.getTracks().forEach(track => track.stop());
+    this.localMediaStream = mode === 'screen'
+      ? await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true })
+      : await navigator.mediaDevices.getUserMedia({ video: mode === 'video', audio: true });
+    this.mediaMode = mode;
+
+    const pc = this.ensureMediaConnection(peerId);
+    this.localMediaStream.getTracks().forEach(track => pc.addTrack(track, this.localMediaStream!));
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    this.sendMediaSignal(peerId, { type: 'offer', sdp: offer.sdp, fileTransferId: 'media' });
+    updateMediaRoom(this.localMediaStream, this.remoteMediaStreams.get(peerId) ?? null, mode, peer.device.deviceName);
+  }
+
+  private stopMedia(peerId: string): void {
+    this.localMediaStream?.getTracks().forEach(track => track.stop());
+    this.localMediaStream = null;
+    this.mediaMode = null;
+    this.mediaConnections.get(peerId)?.close();
+    this.mediaConnections.delete(peerId);
+    this.remoteMediaStreams.delete(peerId);
+    updateMediaRoom(null, null, null, this.peers.get(peerId)?.device.deviceName ?? '');
+  }
+
+  private ensureMediaConnection(peerId: string): RTCPeerConnection {
+    const existing = this.mediaConnections.get(peerId);
+    if (existing) return existing;
+
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+      ],
+    });
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        this.sendMediaSignal(peerId, {
+          type: 'ice-candidate',
+          candidate: event.candidate.toJSON(),
+          fileTransferId: 'media',
+        });
+      }
+    };
+
+    pc.ontrack = (event) => {
+      const stream = this.remoteMediaStreams.get(peerId) ?? new MediaStream();
+      stream.addTrack(event.track);
+      this.remoteMediaStreams.set(peerId, stream);
+      updateMediaRoom(this.localMediaStream, stream, this.mediaMode, this.peers.get(peerId)?.device.deviceName ?? '');
+    };
+
+    this.mediaConnections.set(peerId, pc);
+    return pc;
+  }
+
+  private async handleMediaSignaling(peerId: string, msg: RTCSignalingMessage): Promise<void> {
+    const pc = this.ensureMediaConnection(peerId);
+    if (msg.type === 'offer') {
+      await pc.setRemoteDescription({ type: 'offer', sdp: msg.sdp });
+      this.localMediaStream?.getTracks().forEach(track => pc.addTrack(track, this.localMediaStream!));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      this.sendMediaSignal(peerId, { type: 'answer', sdp: answer.sdp, fileTransferId: 'media' });
+    } else if (msg.type === 'answer') {
+      await pc.setRemoteDescription({ type: 'answer', sdp: msg.sdp });
+    } else if (msg.type === 'ice-candidate' && msg.candidate) {
+      await pc.addIceCandidate(msg.candidate);
+    }
+  }
+
+  private sendMediaSignal(peerId: string, msg: RTCSignalingMessage): void {
+    this.localSignaling.sendSignaling(peerId, msg);
+    this.wsSignaling?.sendSignaling(peerId, msg);
   }
 
   private async sendFiles(files: FileList | File[], peerId: string): Promise<void> {
