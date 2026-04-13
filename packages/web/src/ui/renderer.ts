@@ -711,6 +711,9 @@ export function renderUI(identity: DeviceIdentity, cbs: UICallbacks): void {
             <button id="theme-toggle" class="icon-btn" title="${t('theme')}" aria-label="Toggle theme">
               ${settings.theme === 'dark' ? ICON_SUN : ICON_MOON}
             </button>
+            <button id="pairing-modal-btn" class="icon-btn" title="${t('pairing')}" aria-label="${t('pairing')}">
+              ${ICON_QR}
+            </button>
             <button id="settings-btn" class="icon-btn" title="${t('settings')}" aria-label="Settings">
               ${ICON_SETTINGS}
             </button>
@@ -741,6 +744,21 @@ export function renderUI(identity: DeviceIdentity, cbs: UICallbacks): void {
         </section>
 
         <div class="workspace-column">
+        <section class="drop-zone-section smart-card">
+          <div class="section-heading">
+            <h2>${t('dropTitle')}</h2>
+            <span>${t('dropHint')}</span>
+          </div>
+          <input type="file" id="file-input" multiple style="display:none;position:absolute;left:-9999px" />
+          <div id="drop-zone" class="drop-zone">
+            <div class="drop-zone-content">
+              <div class="drop-icon">${ICON_UPLOAD}</div>
+              <p>${t('dropTitle')}</p>
+              <p class="hint">${t('dropHint')}</p>
+            </div>
+          </div>
+        </section>
+
           <section class="chat-section smart-card">
             <div class="section-heading">
               <h2>${t('chat')}</h2>
@@ -779,21 +797,6 @@ export function renderUI(identity: DeviceIdentity, cbs: UICallbacks): void {
             <p id="media-label"></p>
           </div>
         </section>
-
-        <section class="drop-zone-section smart-card">
-          <div class="section-heading">
-            <h2>${t('dropTitle')}</h2>
-            <span>${t('dropHint')}</span>
-          </div>
-          <input type="file" id="file-input" multiple style="display:none;position:absolute;left:-9999px" />
-          <div id="drop-zone" class="drop-zone">
-            <div class="drop-zone-content">
-              <div class="drop-icon">${ICON_UPLOAD}</div>
-              <p>${t('dropTitle')}</p>
-              <p class="hint">${t('dropHint')}</p>
-            </div>
-          </div>
-        </section>
         </div>
         </div>
 
@@ -802,23 +805,6 @@ export function renderUI(identity: DeviceIdentity, cbs: UICallbacks): void {
           <div id="transfers-list" class="transfers-list"></div>
         </section>
 
-        <section class="pairing-section smart-card">
-          <h2>${t('pairing')}</h2>
-          <div class="pairing-options">
-            <div class="qr-container">
-              <canvas id="qr-canvas" width="180" height="180"></canvas>
-              <p class="hint">${t('scanConnect')}</p>
-              <button id="scan-qr-btn" class="scan-qr-btn" type="button">
-                ${ICON_QR}
-                <span>${t('scanQR')}</span>
-              </button>
-            </div>
-            <div class="link-container">
-              <p>${t('shareLink')}</p>
-              <code id="pairing-url" class="pairing-link"></code>
-            </div>
-          </div>
-        </section>
       </main>
 
       <footer>
@@ -828,6 +814,30 @@ export function renderUI(identity: DeviceIdentity, cbs: UICallbacks): void {
     </div>
 
     <div id="notification-container" class="notification-container"></div>
+    <div id="pairing-overlay" class="pairing-overlay" style="display:none">
+      <div class="pairing-panel">
+        <div class="pairing-panel-header">
+          <div>
+            <h2>${t('pairing')}</h2>
+            <p>${t('scanConnect')}</p>
+          </div>
+          <button class="close-btn" id="close-pairing" aria-label="${t('close')}">&times;</button>
+        </div>
+        <div class="pairing-stack">
+          <div class="qr-container">
+            <canvas id="qr-canvas" width="180" height="180"></canvas>
+          </div>
+          <div class="link-container">
+            <p>${t('shareLink')}</p>
+            <code id="pairing-url" class="pairing-link"></code>
+          </div>
+          <button id="scan-qr-btn" class="scan-qr-btn" type="button">
+            ${ICON_QR}
+            <span>${t('scanQR')}</span>
+          </button>
+        </div>
+      </div>
+    </div>
   `;
 
   // Initialize radar canvas
@@ -857,7 +867,19 @@ export function renderUI(identity: DeviceIdentity, cbs: UICallbacks): void {
   // Settings button
   document.getElementById('settings-btn')!.addEventListener('click', openSettings);
 
+  const pairingOverlay = document.getElementById('pairing-overlay');
+  document.getElementById('pairing-modal-btn')?.addEventListener('click', () => {
+    if (pairingOverlay) pairingOverlay.style.display = 'flex';
+  });
+  document.getElementById('close-pairing')?.addEventListener('click', () => {
+    if (pairingOverlay) pairingOverlay.style.display = 'none';
+  });
+  pairingOverlay?.addEventListener('click', (event) => {
+    if (event.target === pairingOverlay) pairingOverlay.style.display = 'none';
+  });
+
   document.getElementById('scan-qr-btn')?.addEventListener('click', () => {
+    if (pairingOverlay) pairingOverlay.style.display = 'none';
     void openQRScanner();
   });
 

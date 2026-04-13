@@ -43,8 +43,10 @@ npm run dev:signaling    # Start signaling server (port 3001)
 - Text chat is available for the selected radar peer using the live signaling channel, with sent/received message bubbles.
 - QR pairing modal powered by `jsQR` and enlarged QR generation for easier scanning.
 - Short compact `#p=` pairing URLs with click-to-copy behavior on a shortened visible pairing link that still copies the full URL.
+- Pairing QR/link now live in a compact popup opened from the small QR icon beside the header settings button, keeping the main workspace focused.
 - P2P file transfer over encrypted WebRTC Data Channels.
 - A smarter two-column workspace groups radar discovery beside chat, call controls, and file sending cards for a more compact experience.
+- The workspace order prioritizes file upload above chat on desktop; on mobile the flow is radar, file upload, chat, then voice/video controls.
 - P2P media room controls for voice, video, and screen sharing between selected peers, including incoming call accept/reject prompts and separate local/remote video tiles.
 - Settings for save-location UI, Arabic/English language, stealth mode, and dark/light mode.
 
