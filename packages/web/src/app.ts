@@ -8,6 +8,7 @@ import {
   type FileMetadata,
   type HandshakeRequest,
   type HandshakeResponse,
+  type TransferState,
   PROTOCOL_VERSION,
   getOrCreateIdentity,
   SessionStorageAdapter,
@@ -385,7 +386,7 @@ class P2PDropApp {
           updateTransferState(metadata.fileId, 'failed');
           showNotification(`Error sending ${metadata.fileName}: ${error.message}`, 'error');
         },
-        onStateChange: (fId, state) => {
+        onStateChange: (fId: string, state: TransferState) => {
           updateTransferState(fId, state);
         },
       });
