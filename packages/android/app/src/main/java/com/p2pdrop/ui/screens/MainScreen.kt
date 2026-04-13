@@ -344,8 +344,9 @@ fun TransferCard(transfer: TransferProgress) {
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            @Suppress("DEPRECATION")
             LinearProgressIndicator(
-                progress = { progress },
+                progress = progress,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(4.dp)
