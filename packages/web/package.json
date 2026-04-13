@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@p2p-drop/core": "1.0.0",
+    "jsqr": "^1.4.0",
     "qrcode": "^1.5.4"
   },
   "devDependencies": {

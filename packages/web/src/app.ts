@@ -19,6 +19,9 @@ import {
   FileReceiver,
   generatePairingInfo,
   generatePairingURL,
+  generateQRData,
+  parsePairingURL,
+  parseQRData,
 } from '@p2p-drop/core';
 
 import {
@@ -52,6 +55,7 @@ class P2PDropApp {
     renderUI(this.identity, {
       onFilesSelected: (files, peerId) => this.sendFiles(files, peerId),
       onPeerClick: (peerId) => this.connectToPeer(peerId),
+      onQRScanned: (data) => this.handleQRScanned(data),
     });
 
     // Start local signaling (BroadcastChannel for same-origin tabs)
@@ -94,6 +98,25 @@ class P2PDropApp {
     }
   }
 
+  private getSignalingURL(): string {
+    // 1. Explicit override via URL param
+    const params = new URLSearchParams(window.location.search);
+    const fromParam = params.get('signaling');
+    if (fromParam) return fromParam;
+
+    // 2. Derive from current page URL
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.hostname;
+
+    // Local development
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return `ws://localhost:3001`;
+    }
+
+    // Deployed (Replit, Vercel, etc.) — signaling on port 3001 same host
+    return `${proto}//${host}:3001`;
+  }
+
   private setupPairing(): void {
     const pairingInfo = generatePairingInfo(
       this.identity,
@@ -108,8 +131,9 @@ class P2PDropApp {
       pairingElement.textContent = pairingURL;
     }
 
-    // Generate QR code
-    this.generateQRCode(pairingURL);
+    // Generate QR code with embedded signaling URL for auto-connect
+    const qrData = generateQRData({ ...pairingInfo, endpoint: this.getSignalingURL() });
+    this.generateQRCode(qrData);
   }
 
   private async generateQRCode(data: string): Promise<void> {
@@ -124,9 +148,62 @@ class P2PDropApp {
         color: { dark: '#1a1a2e', light: '#ffffff' },
       });
     } catch {
-      // QR code generation failed, show text fallback
       console.warn('[P2P Drop] QR code generation not available');
     }
+  }
+
+  private handleQRScanned(raw: string): void {
+    // Try compact QR data format first (p2pd JSON)
+    let parsed = parseQRData(raw);
+    if (!parsed) {
+      // Try URL format (#pair=base64)
+      const fromURL = parsePairingURL(raw);
+      if (fromURL) {
+        parsed = {
+          deviceId: fromURL.device.deviceId,
+          deviceName: fromURL.device.deviceName,
+          endpoint: fromURL.endpoint,
+          pairingCode: fromURL.pairingCode,
+          expiresAt: fromURL.expiresAt,
+        };
+      }
+    }
+
+    if (!parsed) {
+      showNotification('Invalid QR code — not a P2P Drop code', 'error');
+      return;
+    }
+
+    // Check expiry
+    if (new Date(parsed.expiresAt) < new Date()) {
+      showNotification('QR code has expired — ask the other device to refresh', 'warning');
+      return;
+    }
+
+    // The endpoint field now contains the signaling server URL
+    const signalingUrl = parsed.endpoint;
+    showNotification(`Connecting to ${parsed.deviceName}...`, 'info');
+    console.log('[P2P Drop] QR scanned, connecting via', signalingUrl);
+
+    // If already connected to the same signaling server, skip reconnect
+    if (this.wsSignaling) {
+      showNotification(`Already on a signaling network — device should appear on radar`, 'info');
+      return;
+    }
+
+    // Connect to the signaling server from the QR code
+    this.wsSignaling = new WebSocketSignaling(
+      this.identity.deviceId,
+      this.identity,
+      signalingUrl,
+      {
+        onPeerJoined: (device, peerId) => this.handlePeerJoined(device, peerId),
+        onPeerLeft: (peerId) => this.handlePeerLeft(peerId),
+        onSignalingMessage: (from, msg) => this.handleSignalingMessage(from, msg),
+      }
+    );
+    this.wsSignaling.connect();
+    showNotification(`Joined network — ${parsed.deviceName} should appear on radar`, 'success');
   }
 
   private handlePeerJoined(device: DeviceIdentity, peerId: string): void {
