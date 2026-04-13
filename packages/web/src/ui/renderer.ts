@@ -1,69 +1,551 @@
 /**
- * P2P Drop Web UI Renderer.
- * Modern 2025 design with dark/light mode, animations, and rich transfer feedback.
+ * P2P Drop — Futuristic Radar Scanner UI
+ * Canvas-based radar with scanning beam, proximity mapping, smart icons,
+ * glassmorphism settings panel, particle background, and i18n (AR/EN).
  */
 
 import type { DeviceIdentity, FileMetadata, ProgressUpdate, TransferState, TransferDirection } from '@p2p-drop/core';
 
+/* ═══════════════════════════════════════
+   TYPES
+   ═══════════════════════════════════════ */
 interface UICallbacks {
   onFilesSelected: (files: FileList | File[], peerId: string) => void;
   onPeerClick: (peerId: string) => void;
 }
 
-let selectedPeerId: string | null = null;
-let callbacks: UICallbacks;
+interface PeerEntry {
+  id: string;
+  device: DeviceIdentity;
+  connected: boolean;
+  /** Simulated signal strength 0‒1 (1 = strongest). */
+  signal: number;
+  /** Angle on radar in radians. */
+  angle: number;
+}
 
-const platformIcons: Record<string, string> = {
-  'web': '🌐',
-  'android': '📱',
-  'desktop-windows': '💻',
-  'desktop-macos': '🖥',
-  'desktop-linux': '🐧',
+interface Settings {
+  theme: 'dark' | 'light';
+  language: 'en' | 'ar';
+  storagePath: string;
+  stealthMode: boolean;
+}
+
+/* ═══════════════════════════════════════
+   I18N STRINGS
+   ═══════════════════════════════════════ */
+const i18n: Record<string, Record<string, string>> = {
+  en: {
+    title: 'P2P Drop',
+    subtitle: 'Secure peer-to-peer file transfer',
+    scanning: 'Scanning',
+    noDevices: 'Looking for nearby devices...',
+    openHint: 'Open P2P Drop in another tab or device',
+    dropTitle: 'Drag & drop files here',
+    dropHint: 'or click to select files',
+    transfers: 'Transfers',
+    pairing: 'Pairing',
+    scanConnect: 'Scan to connect',
+    shareLink: 'Share this link:',
+    footer: 'Files are transferred directly between devices — no server involved',
+    settings: 'Settings',
+    theme: 'Theme',
+    darkMode: 'Dark',
+    lightMode: 'Light',
+    language: 'Language',
+    storagePath: 'Download Location',
+    storageDesc: 'Files will be saved to your browser downloads',
+    stealthMode: 'Stealth Mode',
+    stealthDesc: 'Hide from radar — other devices won\'t see you',
+    close: 'Close',
+    selectPeer: 'Please select a device first',
+    me: 'YOU',
+    connected: 'Connected',
+    available: 'Available',
+    waiting: 'Waiting...',
+    sent: 'Sent',
+    received: 'Received',
+    to: 'to',
+    from: 'from',
+    rejected: 'rejected the transfer',
+  },
+  ar: {
+    title: 'P2P Drop',
+    subtitle: 'نقل الملفات الآمن من نظير إلى نظير',
+    scanning: 'جاري المسح',
+    noDevices: 'جاري البحث عن الأجهزة القريبة...',
+    openHint: 'افتح P2P Drop في تبويب أو جهاز آخر',
+    dropTitle: 'اسحب وأفلت الملفات هنا',
+    dropHint: 'أو انقر لاختيار الملفات',
+    transfers: 'عمليات النقل',
+    pairing: 'الاقتران',
+    scanConnect: 'امسح للاتصال',
+    shareLink: 'شارك هذا الرابط:',
+    footer: 'يتم نقل الملفات مباشرة بين الأجهزة — بدون خادم',
+    settings: 'الإعدادات',
+    theme: 'المظهر',
+    darkMode: 'داكن',
+    lightMode: 'فاتح',
+    language: 'اللغة',
+    storagePath: 'مكان التحميل',
+    storageDesc: 'سيتم حفظ الملفات في تنزيلات المتصفح',
+    stealthMode: 'وضع التخفي',
+    stealthDesc: 'الاختفاء من الرادار — الأجهزة الأخرى لن تراك',
+    close: 'إغلاق',
+    selectPeer: 'الرجاء اختيار جهاز أولاً',
+    me: 'أنت',
+    connected: 'متصل',
+    available: 'متاح',
+    waiting: 'انتظار...',
+    sent: 'تم الإرسال',
+    received: 'تم الاستلام',
+    to: 'إلى',
+    from: 'من',
+    rejected: 'رفض النقل',
+  },
 };
 
-function getTheme(): string {
-  const saved = localStorage.getItem('p2p-drop-theme');
-  if (saved) return saved;
-  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+/* ═══════════════════════════════════════
+   SVG ICONS (Minimalist / Cyberpunk)
+   ═══════════════════════════════════════ */
+const deviceIcons: Record<string, string> = {
+  'web': `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`,
+  'android': `<svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12" y2="18.01"/></svg>`,
+  'desktop-windows': `<svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`,
+  'desktop-macos': `<svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`,
+  'desktop-linux': `<svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`,
+  'unknown': `<svg viewBox="0 0 24 24"><path d="M5.5 8.5 9 12l-3.5 3.5L2 12l3.5-3.5Z"/><path d="m12 2 3.5 3.5L12 9 8.5 5.5 12 2Z"/><path d="M18.5 8.5 22 12l-3.5 3.5L15 12l3.5-3.5Z"/><path d="m12 15 3.5 3.5L12 22l-3.5-3.5L12 15Z"/></svg>`,
+};
+
+/* ═══════════════════════════════════════
+   STATE
+   ═══════════════════════════════════════ */
+let selectedPeerId: string | null = null;
+let callbacks: UICallbacks;
+let currentPeers: PeerEntry[] = [];
+let radarAnimId: number | null = null;
+let particleAnimId: number | null = null;
+let beamAngle = 0;
+let settings: Settings;
+
+function t(key: string): string {
+  return i18n[settings.language]?.[key] || i18n['en'][key] || key;
 }
 
-function setTheme(theme: string): void {
-  document.documentElement.setAttribute('data-theme', theme);
-  localStorage.setItem('p2p-drop-theme', theme);
-  const btn = document.getElementById('theme-toggle');
-  if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+function loadSettings(): Settings {
+  try {
+    const raw = localStorage.getItem('p2p-drop-settings');
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return {
+    theme: window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark',
+    language: 'en',
+    storagePath: '~/Downloads',
+    stealthMode: false,
+  };
 }
 
-/**
- * Render the main UI.
- */
+function saveSettings(): void {
+  localStorage.setItem('p2p-drop-settings', JSON.stringify(settings));
+}
+
+function applyTheme(): void {
+  document.documentElement.setAttribute('data-theme', settings.theme);
+}
+
+function applyLanguage(): void {
+  document.documentElement.setAttribute('dir', settings.language === 'ar' ? 'rtl' : 'ltr');
+  document.documentElement.setAttribute('lang', settings.language);
+}
+
+/* ═══════════════════════════════════════
+   RADAR CANVAS RENDERING
+   ═══════════════════════════════════════ */
+function drawRadar(canvas: HTMLCanvasElement): void {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+
+  const w = rect.width;
+  const h = rect.height;
+  const cx = w / 2;
+  const cy = h / 2;
+  const maxR = Math.min(cx, cy) - 2;
+
+  // Get CSS custom properties for theme-aware colors
+  const style = getComputedStyle(document.documentElement);
+  const accentRaw = style.getPropertyValue('--accent').trim();
+  const bgPrimary = style.getPropertyValue('--bg-primary').trim();
+
+  ctx.clearRect(0, 0, w, h);
+
+  // Background circle
+  ctx.beginPath();
+  ctx.arc(cx, cy, maxR, 0, Math.PI * 2);
+  ctx.fillStyle = bgPrimary || '#050510';
+  ctx.fill();
+
+  // Grid rings
+  const ringCount = 4;
+  for (let i = 1; i <= ringCount; i++) {
+    const r = (maxR / ringCount) * i;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(0, 229, 255, ${0.06 - i * 0.01})`;
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+  }
+
+  // Cross lines
+  ctx.strokeStyle = 'rgba(0, 229, 255, 0.04)';
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - maxR);
+  ctx.lineTo(cx, cy + maxR);
+  ctx.moveTo(cx - maxR, cy);
+  ctx.lineTo(cx + maxR, cy);
+  // Diagonal lines
+  const diagOff = maxR * 0.707;
+  ctx.moveTo(cx - diagOff, cy - diagOff);
+  ctx.lineTo(cx + diagOff, cy + diagOff);
+  ctx.moveTo(cx + diagOff, cy - diagOff);
+  ctx.lineTo(cx - diagOff, cy + diagOff);
+  ctx.stroke();
+
+  // ─── Scanning beam ───
+  beamAngle = (beamAngle + 0.012) % (Math.PI * 2);
+  const beamLen = maxR;
+
+  // Beam trail (gradient arc)
+  const trailAngle = 0.6; // radians of trail
+  const grad = ctx.createConicGradient(beamAngle - trailAngle, cx, cy);
+  const normalizedStart = 0;
+  const normalizedEnd = trailAngle / (Math.PI * 2);
+  grad.addColorStop(normalizedStart, 'rgba(0, 229, 255, 0)');
+  grad.addColorStop(normalizedEnd * 0.5, 'rgba(0, 229, 255, 0.04)');
+  grad.addColorStop(normalizedEnd, 'rgba(0, 229, 255, 0.12)');
+  grad.addColorStop(normalizedEnd + 0.001, 'rgba(0, 229, 255, 0)');
+  grad.addColorStop(1, 'rgba(0, 229, 255, 0)');
+
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.arc(cx, cy, maxR, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Beam line
+  const bx = cx + Math.cos(beamAngle) * beamLen;
+  const by = cy + Math.sin(beamAngle) * beamLen;
+
+  const lineGrad = ctx.createLinearGradient(cx, cy, bx, by);
+  lineGrad.addColorStop(0, 'rgba(0, 229, 255, 0.5)');
+  lineGrad.addColorStop(1, 'rgba(0, 229, 255, 0)');
+
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(bx, by);
+  ctx.strokeStyle = lineGrad;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Center dot
+  ctx.beginPath();
+  ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+  ctx.fillStyle = accentRaw || '#00e5ff';
+  ctx.fill();
+
+  // Center glow
+  const centerGlow = ctx.createRadialGradient(cx, cy, 0, cx, cy, 20);
+  centerGlow.addColorStop(0, 'rgba(0, 229, 255, 0.2)');
+  centerGlow.addColorStop(1, 'rgba(0, 229, 255, 0)');
+  ctx.beginPath();
+  ctx.arc(cx, cy, 20, 0, Math.PI * 2);
+  ctx.fillStyle = centerGlow;
+  ctx.fill();
+
+  // Outer glow
+  const outerGlow = ctx.createRadialGradient(cx, cy, maxR - 15, cx, cy, maxR + 5);
+  outerGlow.addColorStop(0, 'rgba(0, 229, 255, 0)');
+  outerGlow.addColorStop(1, 'rgba(0, 229, 255, 0.06)');
+  ctx.beginPath();
+  ctx.arc(cx, cy, maxR + 5, 0, Math.PI * 2);
+  ctx.fillStyle = outerGlow;
+  ctx.fill();
+
+  radarAnimId = requestAnimationFrame(() => drawRadar(canvas));
+}
+
+/* ═══════════════════════════════════════
+   PARTICLE BACKGROUND
+   ═══════════════════════════════════════ */
+interface Particle {
+  x: number; y: number; vx: number; vy: number; size: number; opacity: number;
+}
+
+let particles: Particle[] = [];
+
+function initParticles(canvas: HTMLCanvasElement): void {
+  const count = 50;
+  particles = [];
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      vx: (Math.random() - 0.5) * 0.3,
+      vy: (Math.random() - 0.5) * 0.3,
+      size: Math.random() * 1.5 + 0.5,
+      opacity: Math.random() * 0.3 + 0.1,
+    });
+  }
+}
+
+function drawParticles(canvas: HTMLCanvasElement): void {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = window.innerWidth * dpr;
+  canvas.height = window.innerHeight * dpr;
+  ctx.scale(dpr, dpr);
+
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+
+  ctx.clearRect(0, 0, w, h);
+
+  for (const p of particles) {
+    p.x += p.vx;
+    p.y += p.vy;
+    if (p.x < 0) p.x = w;
+    if (p.x > w) p.x = 0;
+    if (p.y < 0) p.y = h;
+    if (p.y > h) p.y = 0;
+
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(0, 229, 255, ${p.opacity})`;
+    ctx.fill();
+  }
+
+  // Draw connections between close particles
+  for (let i = 0; i < particles.length; i++) {
+    for (let j = i + 1; j < particles.length; j++) {
+      const dx = particles[i].x - particles[j].x;
+      const dy = particles[i].y - particles[j].y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 120) {
+        ctx.beginPath();
+        ctx.moveTo(particles[i].x, particles[i].y);
+        ctx.lineTo(particles[j].x, particles[j].y);
+        ctx.strokeStyle = `rgba(0, 229, 255, ${0.06 * (1 - dist / 120)})`;
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+      }
+    }
+  }
+
+  particleAnimId = requestAnimationFrame(() => drawParticles(canvas));
+}
+
+/* ═══════════════════════════════════════
+   DEVICE POSITIONING (Proximity Algorithm)
+   ═══════════════════════════════════════ */
+function getDeviceIcon(platform: string): string {
+  return deviceIcons[platform] || deviceIcons['unknown'];
+}
+
+function computeSignalStrength(device: DeviceIdentity, connected: boolean): number {
+  // Connected devices get strong signal
+  if (connected) return 0.85 + Math.random() * 0.15;
+  // Same platform = likely nearby
+  const platformBonus = device.platform === 'web' ? 0.1 : 0;
+  return 0.3 + Math.random() * 0.4 + platformBonus;
+}
+
+function positionOnRadar(signal: number, angle: number, wrapperSize: number): { x: number; y: number } {
+  const center = wrapperSize / 2;
+  const maxRadius = center - 30; // Leave margin for device icons
+  // Strong signal = close to center, weak = near edge
+  const distance = maxRadius * (1 - signal * 0.8);
+  return {
+    x: center + Math.cos(angle) * distance,
+    y: center + Math.sin(angle) * distance,
+  };
+}
+
+function getPulseSpeed(signal: number): string {
+  // Stronger signal = faster pulse
+  const speed = 2.5 - signal * 1.5; // 1.0s (strong) to 2.5s (weak)
+  return `${speed.toFixed(1)}s`;
+}
+
+/* ═══════════════════════════════════════
+   SETTINGS PANEL
+   ═══════════════════════════════════════ */
+function openSettings(): void {
+  // Remove existing
+  document.getElementById('settings-overlay')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'settings-overlay';
+  overlay.className = 'settings-overlay';
+  overlay.innerHTML = `
+    <div class="settings-panel">
+      <h2>
+        <span>${t('settings')}</span>
+        <button class="close-btn" id="close-settings" aria-label="${t('close')}">&times;</button>
+      </h2>
+
+      <div class="setting-group">
+        <label>${t('theme')}</label>
+        <div class="setting-row">
+          <span class="setting-label">${settings.theme === 'dark' ? '🌙' : '☀️'} ${settings.theme === 'dark' ? t('darkMode') : t('lightMode')}</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="theme-toggle-input" ${settings.theme === 'light' ? 'checked' : ''} />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <label>${t('language')}</label>
+        <div class="segment-control">
+          <button class="segment-btn ${settings.language === 'en' ? 'active' : ''}" data-lang="en">English</button>
+          <button class="segment-btn ${settings.language === 'ar' ? 'active' : ''}" data-lang="ar">العربية</button>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <label>${t('storagePath')}</label>
+        <input type="text" class="setting-input" id="storage-path-input" value="${escapeHtml(settings.storagePath)}" placeholder="~/Downloads" />
+        <p class="setting-desc">${t('storageDesc')}</p>
+      </div>
+
+      <div class="setting-group">
+        <label>${t('stealthMode')}</label>
+        <div class="setting-row">
+          <span class="setting-label">👻 ${t('stealthMode')}</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="stealth-toggle-input" ${settings.stealthMode ? 'checked' : ''} />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <p class="setting-desc">${t('stealthDesc')}</p>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  // Close on overlay click
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) closeSettings();
+  });
+
+  // Close button
+  document.getElementById('close-settings')!.addEventListener('click', closeSettings);
+
+  // Theme toggle
+  document.getElementById('theme-toggle-input')!.addEventListener('change', (e) => {
+    settings.theme = (e.target as HTMLInputElement).checked ? 'light' : 'dark';
+    applyTheme();
+    saveSettings();
+    // Re-open to update labels
+    openSettings();
+  });
+
+  // Language buttons
+  overlay.querySelectorAll('.segment-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      settings.language = (btn as HTMLElement).dataset.lang as 'en' | 'ar';
+      applyLanguage();
+      saveSettings();
+      // Rebuild entire UI
+      closeSettings();
+      rebuildUI();
+      openSettings();
+    });
+  });
+
+  // Storage path
+  document.getElementById('storage-path-input')!.addEventListener('change', (e) => {
+    settings.storagePath = (e.target as HTMLInputElement).value;
+    saveSettings();
+  });
+
+  // Stealth toggle
+  document.getElementById('stealth-toggle-input')!.addEventListener('change', (e) => {
+    settings.stealthMode = (e.target as HTMLInputElement).checked;
+    saveSettings();
+  });
+}
+
+function closeSettings(): void {
+  const overlay = document.getElementById('settings-overlay');
+  if (overlay) overlay.remove();
+}
+
+/* ═══════════════════════════════════════
+   MAIN RENDER
+   ═══════════════════════════════════════ */
+let currentIdentity: DeviceIdentity;
+
+function rebuildUI(): void {
+  renderUI(currentIdentity, callbacks);
+}
+
 export function renderUI(identity: DeviceIdentity, cbs: UICallbacks): void {
   callbacks = cbs;
+  currentIdentity = identity;
+  settings = loadSettings();
+
   const app = document.getElementById('app');
   if (!app) return;
 
+  applyTheme();
+  applyLanguage();
+
   app.innerHTML = `
+    <canvas id="particle-canvas"></canvas>
     <div class="container">
       <header>
-        <h1>P2P Drop</h1>
-        <p class="subtitle">Secure peer-to-peer file transfer</p>
+        <h1>${t('title')}</h1>
+        <p class="subtitle">${t('subtitle')}</p>
         <div class="header-row">
           <div class="device-info">
-            <span class="device-icon">${platformIcons[identity.platform] || '📡'}</span>
+            <span class="device-icon">${getDeviceIcon(identity.platform)}</span>
             <span class="device-name">${escapeHtml(identity.deviceName)}</span>
           </div>
-          <button id="theme-toggle" class="theme-toggle" title="Toggle theme" aria-label="Toggle dark/light mode"></button>
+          <div class="header-actions">
+            <button id="theme-toggle" class="icon-btn" title="${t('theme')}" aria-label="Toggle theme">
+              ${settings.theme === 'dark' ? '☀️' : '🌙'}
+            </button>
+            <button id="settings-btn" class="icon-btn" title="${t('settings')}" aria-label="Settings">
+              ⚙️
+            </button>
+          </div>
         </div>
       </header>
 
       <main>
-        <section class="peers-section">
-          <h2>Nearby Devices</h2>
-          <div id="peers-container" class="peers-grid">
-            <div class="empty-state">
-              <div class="pulse-ring"></div>
-              <p>Looking for nearby devices...</p>
-              <p class="hint">Open P2P Drop in another tab or device on the same network</p>
+        <section class="radar-section">
+          <div class="radar-wrapper" id="radar-wrapper">
+            <canvas class="radar-canvas" id="radar-canvas"></canvas>
+            <div class="radar-overlay"></div>
+            <div class="radar-me">
+              <div class="me-dot"></div>
+              <div class="me-label">${t('me')}</div>
+            </div>
+            <div id="radar-devices"></div>
+            <div id="radar-empty" class="radar-empty">
+              <p>${t('noDevices')}</p>
+              <p class="scan-label">${t('scanning')}...</p>
             </div>
           </div>
         </section>
@@ -71,28 +553,34 @@ export function renderUI(identity: DeviceIdentity, cbs: UICallbacks): void {
         <section class="drop-zone-section">
           <div id="drop-zone" class="drop-zone">
             <div class="drop-zone-content">
-              <div class="drop-icon">📁</div>
-              <p>Drag & drop files here</p>
-              <p class="hint">or click to select files</p>
+              <div class="drop-icon">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+              </div>
+              <p>${t('dropTitle')}</p>
+              <p class="hint">${t('dropHint')}</p>
               <input type="file" id="file-input" multiple style="display:none" />
             </div>
           </div>
         </section>
 
         <section class="transfers-section" id="transfers-section" style="display:none">
-          <h2>Transfers</h2>
+          <h2>${t('transfers')}</h2>
           <div id="transfers-list" class="transfers-list"></div>
         </section>
 
         <section class="pairing-section">
-          <h2>Pairing</h2>
+          <h2>${t('pairing')}</h2>
           <div class="pairing-options">
             <div class="qr-container">
-              <canvas id="qr-canvas" width="200" height="200"></canvas>
-              <p class="hint">Scan to connect</p>
+              <canvas id="qr-canvas" width="180" height="180"></canvas>
+              <p class="hint">${t('scanConnect')}</p>
             </div>
             <div class="link-container">
-              <p>Share this link:</p>
+              <p>${t('shareLink')}</p>
               <code id="pairing-url" class="pairing-link"></code>
             </div>
           </div>
@@ -100,83 +588,135 @@ export function renderUI(identity: DeviceIdentity, cbs: UICallbacks): void {
       </main>
 
       <footer>
-        <p>Files are transferred directly between devices — no server involved</p>
+        <p>${t('footer')}</p>
       </footer>
     </div>
 
     <div id="notification-container" class="notification-container"></div>
   `;
 
-  // Initialize theme
-  const theme = getTheme();
-  setTheme(theme);
+  // Initialize radar canvas
+  const radarCanvas = document.getElementById('radar-canvas') as HTMLCanvasElement;
+  if (radarCanvas) {
+    if (radarAnimId) cancelAnimationFrame(radarAnimId);
+    drawRadar(radarCanvas);
+  }
 
-  // Theme toggle handler
+  // Initialize particle background
+  const particleCanvas = document.getElementById('particle-canvas') as HTMLCanvasElement;
+  if (particleCanvas) {
+    if (particleAnimId) cancelAnimationFrame(particleAnimId);
+    initParticles(particleCanvas);
+    drawParticles(particleCanvas);
+  }
+
+  // Theme toggle
   document.getElementById('theme-toggle')!.addEventListener('click', () => {
-    const current = document.documentElement.getAttribute('data-theme') || 'dark';
-    setTheme(current === 'dark' ? 'light' : 'dark');
+    settings.theme = settings.theme === 'dark' ? 'light' : 'dark';
+    applyTheme();
+    saveSettings();
+    const btn = document.getElementById('theme-toggle');
+    if (btn) btn.innerHTML = settings.theme === 'dark' ? '☀️' : '🌙';
   });
+
+  // Settings button
+  document.getElementById('settings-btn')!.addEventListener('click', openSettings);
 
   // Listen for system theme changes
   window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', (e) => {
-    if (!localStorage.getItem('p2p-drop-theme')) {
-      setTheme(e.matches ? 'light' : 'dark');
+    if (!localStorage.getItem('p2p-drop-settings')) {
+      settings.theme = e.matches ? 'light' : 'dark';
+      applyTheme();
     }
   });
 
   setupDropZone();
   setupFileInput();
+
+  // Re-render any existing peers
+  if (currentPeers.length > 0) {
+    renderRadarDevices();
+  }
 }
 
-/**
- * Update the peer list display.
- */
-export function updatePeerList(peers: Array<{ id: string; device: DeviceIdentity; connected: boolean }>): void {
-  const container = document.getElementById('peers-container');
-  if (!container) return;
+/* ═══════════════════════════════════════
+   PEER RENDERING ON RADAR
+   ═══════════════════════════════════════ */
+function renderRadarDevices(): void {
+  const container = document.getElementById('radar-devices');
+  const emptyState = document.getElementById('radar-empty');
+  const wrapper = document.getElementById('radar-wrapper');
+  if (!container || !wrapper) return;
 
-  if (peers.length === 0) {
-    container.innerHTML = `
-      <div class="empty-state">
-        <div class="pulse-ring"></div>
-        <p>Looking for nearby devices...</p>
-        <p class="hint">Open P2P Drop in another tab or device on the same network</p>
-      </div>
-    `;
+  const wrapperSize = wrapper.getBoundingClientRect().width || 420;
+
+  if (currentPeers.length === 0) {
+    container.innerHTML = '';
+    if (emptyState) emptyState.style.display = 'block';
     return;
   }
 
-  container.innerHTML = peers.map(peer => `
-    <div class="peer-card ${selectedPeerId === peer.id ? 'selected' : ''} ${peer.connected ? 'connected' : ''}"
-         data-peer-id="${escapeHtml(peer.id)}"
-         role="button"
-         tabindex="0">
-      <div class="peer-icon">${platformIcons[peer.device.platform] || '📡'}</div>
-      <div class="peer-name">${escapeHtml(peer.device.deviceName)}</div>
-      <div class="peer-platform">${escapeHtml(peer.device.platform)}</div>
-      <div class="peer-status ${peer.connected ? 'status-connected' : 'status-available'}">
-        ${peer.connected ? 'Connected' : 'Available'}
-      </div>
-    </div>
-  `).join('');
+  if (emptyState) emptyState.style.display = 'none';
 
-  // Add click handlers
-  container.querySelectorAll('.peer-card').forEach(card => {
-    card.addEventListener('click', () => {
-      const peerId = (card as HTMLElement).dataset.peerId!;
+  container.innerHTML = currentPeers.map(peer => {
+    const pos = positionOnRadar(peer.signal, peer.angle, wrapperSize);
+    const pulseSpeed = getPulseSpeed(peer.signal);
+    const icon = getDeviceIcon(peer.device.platform);
+    const isSelected = selectedPeerId === peer.id;
+    const statusClass = peer.connected ? 'online' : 'connecting';
+    const statusText = peer.connected ? t('connected') : t('available');
+    const opacity = 0.5 + peer.signal * 0.5;
+
+    return `
+      <div class="radar-device device-enter ${isSelected ? 'selected' : ''}"
+           data-peer-id="${escapeHtml(peer.id)}"
+           style="left: ${pos.x}px; top: ${pos.y}px; --pulse-speed: ${pulseSpeed}; opacity: ${opacity};">
+        <div class="device-dot">
+          ${icon}
+          <div class="pulse-ring"></div>
+          <div class="pulse-ring-2"></div>
+        </div>
+        <div class="device-label">${escapeHtml(peer.device.deviceName)}</div>
+        <div class="device-tooltip">
+          <div class="tt-name">${escapeHtml(peer.device.deviceName)}</div>
+          <div class="tt-platform">${escapeHtml(peer.device.platform)}</div>
+          <div class="tt-status ${statusClass}">${statusText}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Attach click handlers
+  container.querySelectorAll('.radar-device').forEach(el => {
+    el.addEventListener('click', () => {
+      const peerId = (el as HTMLElement).dataset.peerId!;
       selectedPeerId = peerId;
       callbacks.onPeerClick(peerId);
 
-      // Update selection visual
-      container.querySelectorAll('.peer-card').forEach(c => c.classList.remove('selected'));
-      card.classList.add('selected');
+      // Update selection
+      container.querySelectorAll('.radar-device').forEach(d => d.classList.remove('selected'));
+      el.classList.add('selected');
     });
   });
 }
 
-/**
- * Add a transfer entry to the transfers list.
- */
+export function updatePeerList(peers: Array<{ id: string; device: DeviceIdentity; connected: boolean }>): void {
+  // Assign signal strength and angles
+  currentPeers = peers.map((peer, idx) => {
+    const existing = currentPeers.find(p => p.id === peer.id);
+    return {
+      ...peer,
+      signal: existing?.signal ?? computeSignalStrength(peer.device, peer.connected),
+      angle: existing?.angle ?? ((Math.PI * 2 * idx) / Math.max(peers.length, 1) + Math.random() * 0.3),
+    };
+  });
+
+  renderRadarDevices();
+}
+
+/* ═══════════════════════════════════════
+   TRANSFERS
+   ═══════════════════════════════════════ */
 export function addTransferEntry(
   metadata: FileMetadata,
   direction: TransferDirection,
@@ -198,7 +738,7 @@ export function addTransferEntry(
       <div class="transfer-meta">
         <span class="transfer-size">${formatSize(metadata.fileSize)}</span>
         <span class="separator"></span>
-        <span class="transfer-peer">${direction === 'send' ? 'to' : 'from'} ${escapeHtml(peerName)}</span>
+        <span class="transfer-peer">${direction === 'send' ? t('to') : t('from')} ${escapeHtml(peerName)}</span>
       </div>
     </div>
     <div class="transfer-progress">
@@ -206,7 +746,7 @@ export function addTransferEntry(
         <div class="progress-fill" id="progress-${metadata.fileId}" style="width: 0%"></div>
       </div>
       <div class="transfer-stats">
-        <span class="transfer-speed" id="speed-${metadata.fileId}">Waiting...</span>
+        <span class="transfer-speed" id="speed-${metadata.fileId}">${t('waiting')}</span>
         <span class="transfer-eta" id="eta-${metadata.fileId}"></span>
         <span class="transfer-state state-pending" id="state-${metadata.fileId}">pending</span>
       </div>
@@ -216,9 +756,6 @@ export function addTransferEntry(
   list.prepend(entry);
 }
 
-/**
- * Update transfer progress bar.
- */
 export function updateTransferProgress(fileId: string, update: ProgressUpdate): void {
   const progressBar = document.getElementById(`progress-${fileId}`);
   const speedEl = document.getElementById(`speed-${fileId}`);
@@ -236,9 +773,6 @@ export function updateTransferProgress(fileId: string, update: ProgressUpdate): 
   }
 }
 
-/**
- * Update transfer state display.
- */
 export function updateTransferState(fileId: string, state: TransferState): void {
   const stateEl = document.getElementById(`state-${fileId}`);
   const entry = document.getElementById(`transfer-${fileId}`);
@@ -252,9 +786,9 @@ export function updateTransferState(fileId: string, state: TransferState): void 
   }
 }
 
-/**
- * Show a notification toast.
- */
+/* ═══════════════════════════════════════
+   NOTIFICATIONS
+   ═══════════════════════════════════════ */
 export function showNotification(message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info'): void {
   const container = document.getElementById('notification-container');
   if (!container) return;
@@ -264,15 +798,15 @@ export function showNotification(message: string, type: 'info' | 'success' | 'wa
   notification.textContent = message;
   container.appendChild(notification);
 
-  // Auto-remove after 4 seconds
   setTimeout(() => {
     notification.classList.add('notification-exit');
     setTimeout(() => notification.remove(), 250);
   }, 4000);
 }
 
-// --- Private helpers ---
-
+/* ═══════════════════════════════════════
+   HELPERS
+   ═══════════════════════════════════════ */
 function setupDropZone(): void {
   const dropZone = document.getElementById('drop-zone');
   if (!dropZone) return;
@@ -289,11 +823,8 @@ function setupDropZone(): void {
   dropZone.addEventListener('drop', (e) => {
     e.preventDefault();
     dropZone.classList.remove('drag-over');
-
     const files = (e as DragEvent).dataTransfer?.files;
-    if (files && files.length > 0) {
-      handleFilesSelected(files);
-    }
+    if (files && files.length > 0) handleFilesSelected(files);
   });
 
   dropZone.addEventListener('click', () => {
@@ -308,14 +839,14 @@ function setupFileInput(): void {
   input.addEventListener('change', () => {
     if (input.files && input.files.length > 0) {
       handleFilesSelected(input.files);
-      input.value = ''; // Reset for next selection
+      input.value = '';
     }
   });
 }
 
 function handleFilesSelected(files: FileList): void {
   if (!selectedPeerId) {
-    showNotification('Please select a device first, then drop files', 'warning');
+    showNotification(t('selectPeer'), 'warning');
     return;
   }
   callbacks.onFilesSelected(files, selectedPeerId);
