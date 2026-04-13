@@ -100,7 +100,7 @@ export class LANTransferServer {
           for (const file of request.files) {
             this.activeTransfers.set(file.fileId, {
               metadata: file,
-              savePath: path.join(savePath, file.fileName),
+              savePath: path.join(savePath, path.basename(file.fileName)),
               bytesReceived: 0,
             });
           }
