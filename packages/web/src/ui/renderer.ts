@@ -36,11 +36,11 @@ interface Settings {
    ═══════════════════════════════════════ */
 const i18n: Record<string, Record<string, string>> = {
   en: {
-    title: 'P2P Drop',
+    title: 'Kareem 🚀⚡🚀 Hamza',
     subtitle: 'Secure peer-to-peer file transfer',
     scanning: 'Scanning',
     noDevices: 'Looking for nearby devices...',
-    openHint: 'Open P2P Drop in another tab or device',
+    openHint: 'Open Kareem 🚀⚡🚀 Hamza in another tab or device',
     dropTitle: 'Drag & drop files here',
     dropHint: 'or click to select files',
     transfers: 'Transfers',
@@ -70,11 +70,11 @@ const i18n: Record<string, Record<string, string>> = {
     rejected: 'rejected the transfer',
   },
   ar: {
-    title: 'P2P Drop',
+    title: 'Kareem 🚀⚡🚀 Hamza',
     subtitle: 'نقل الملفات الآمن من نظير إلى نظير',
     scanning: 'جاري المسح',
     noDevices: 'جاري البحث عن الأجهزة القريبة...',
-    openHint: 'افتح P2P Drop في تبويب أو جهاز آخر',
+    openHint: 'افتح Kareem 🚀⚡🚀 Hamza في تبويب أو جهاز آخر',
     dropTitle: 'اسحب وأفلت الملفات هنا',
     dropHint: 'أو انقر لاختيار الملفات',
     transfers: 'عمليات النقل',
