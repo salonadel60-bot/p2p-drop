@@ -1,6 +1,6 @@
 /**
  * P2P Drop Web UI Renderer.
- * Builds a Snapdrop-inspired UI with device discovery, drag & drop, and transfer progress.
+ * Modern 2025 design with dark/light mode, animations, and rich transfer feedback.
  */
 
 import type { DeviceIdentity, FileMetadata, ProgressUpdate, TransferState, TransferDirection } from '@p2p-drop/core';
@@ -21,6 +21,19 @@ const platformIcons: Record<string, string> = {
   'desktop-linux': '🐧',
 };
 
+function getTheme(): string {
+  const saved = localStorage.getItem('p2p-drop-theme');
+  if (saved) return saved;
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+
+function setTheme(theme: string): void {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('p2p-drop-theme', theme);
+  const btn = document.getElementById('theme-toggle');
+  if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+}
+
 /**
  * Render the main UI.
  */
@@ -34,9 +47,12 @@ export function renderUI(identity: DeviceIdentity, cbs: UICallbacks): void {
       <header>
         <h1>P2P Drop</h1>
         <p class="subtitle">Secure peer-to-peer file transfer</p>
-        <div class="device-info">
-          <span class="device-icon">${platformIcons[identity.platform] || '📡'}</span>
-          <span class="device-name">${escapeHtml(identity.deviceName)}</span>
+        <div class="header-row">
+          <div class="device-info">
+            <span class="device-icon">${platformIcons[identity.platform] || '📡'}</span>
+            <span class="device-name">${escapeHtml(identity.deviceName)}</span>
+          </div>
+          <button id="theme-toggle" class="theme-toggle" title="Toggle theme" aria-label="Toggle dark/light mode"></button>
         </div>
       </header>
 
@@ -90,6 +106,23 @@ export function renderUI(identity: DeviceIdentity, cbs: UICallbacks): void {
 
     <div id="notification-container" class="notification-container"></div>
   `;
+
+  // Initialize theme
+  const theme = getTheme();
+  setTheme(theme);
+
+  // Theme toggle handler
+  document.getElementById('theme-toggle')!.addEventListener('click', () => {
+    const current = document.documentElement.getAttribute('data-theme') || 'dark';
+    setTheme(current === 'dark' ? 'light' : 'dark');
+  });
+
+  // Listen for system theme changes
+  window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', (e) => {
+    if (!localStorage.getItem('p2p-drop-theme')) {
+      setTheme(e.matches ? 'light' : 'dark');
+    }
+  });
 
   setupDropZone();
   setupFileInput();
@@ -161,9 +194,12 @@ export function addTransferEntry(
   entry.innerHTML = `
     <div class="transfer-header">
       <span class="transfer-direction">${direction === 'send' ? '⬆️' : '⬇️'}</span>
-      <span class="transfer-filename">${escapeHtml(metadata.fileName)}</span>
-      <span class="transfer-size">${formatSize(metadata.fileSize)}</span>
-      <span class="transfer-peer">${direction === 'send' ? 'to' : 'from'} ${escapeHtml(peerName)}</span>
+      <span class="transfer-filename" title="${escapeHtml(metadata.fileName)}">${escapeHtml(metadata.fileName)}</span>
+      <div class="transfer-meta">
+        <span class="transfer-size">${formatSize(metadata.fileSize)}</span>
+        <span class="separator"></span>
+        <span class="transfer-peer">${direction === 'send' ? 'to' : 'from'} ${escapeHtml(peerName)}</span>
+      </div>
     </div>
     <div class="transfer-progress">
       <div class="progress-bar">
@@ -172,7 +208,7 @@ export function addTransferEntry(
       <div class="transfer-stats">
         <span class="transfer-speed" id="speed-${metadata.fileId}">Waiting...</span>
         <span class="transfer-eta" id="eta-${metadata.fileId}"></span>
-        <span class="transfer-state" id="state-${metadata.fileId}">pending</span>
+        <span class="transfer-state state-pending" id="state-${metadata.fileId}">pending</span>
       </div>
     </div>
   `;
@@ -228,11 +264,11 @@ export function showNotification(message: string, type: 'info' | 'success' | 'wa
   notification.textContent = message;
   container.appendChild(notification);
 
-  // Auto-remove after 5 seconds
+  // Auto-remove after 4 seconds
   setTimeout(() => {
     notification.classList.add('notification-exit');
-    setTimeout(() => notification.remove(), 300);
-  }, 5000);
+    setTimeout(() => notification.remove(), 250);
+  }, 4000);
 }
 
 // --- Private helpers ---

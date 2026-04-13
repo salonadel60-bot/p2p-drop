@@ -8,6 +8,10 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as crypto from 'crypto';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import { getOrCreateIdentity } from '@p2p-drop/core';
 import type { DeviceIdentity, FileMetadata, HandshakeRequest, DiscoveryAnnouncement } from '@p2p-drop/core';
 import { PROTOCOL_VERSION, DEFAULT_HTTP_PORT, computeOptimalChunkSize } from '@p2p-drop/core';

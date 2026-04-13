@@ -5,7 +5,7 @@
   "type": "module",
   "main": "dist/main/main.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && cp src/renderer/index.html dist/renderer/index.html",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
     "start": "electron dist/main/main.js",

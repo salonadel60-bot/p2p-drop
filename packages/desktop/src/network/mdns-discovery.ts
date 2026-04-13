@@ -3,7 +3,8 @@
  * Uses bonjour-service for cross-platform mDNS.
  */
 
-import Bonjour from 'bonjour-service';
+import BonjourModule from 'bonjour-service';
+const Bonjour = (BonjourModule as unknown as { default: typeof BonjourModule }).default ?? BonjourModule;
 import type { DeviceIdentity, DiscoveryAnnouncement } from '@p2p-drop/core';
 import type { DiscoveredPeer, DiscoveryService } from '@p2p-drop/core';
 import { DEFAULT_HTTP_PORT } from '@p2p-drop/core';
