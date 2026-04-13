@@ -106,16 +106,28 @@ const i18n: Record<string, Record<string, string>> = {
 };
 
 /* ═══════════════════════════════════════
-   SVG ICONS (Minimalist / Cyberpunk)
+   SVG ICONS
    ═══════════════════════════════════════ */
 const deviceIcons: Record<string, string> = {
   'web': `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`,
-  'android': `<svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12" y2="18.01"/></svg>`,
-  'desktop-windows': `<svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`,
-  'desktop-macos': `<svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`,
-  'desktop-linux': `<svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`,
-  'unknown': `<svg viewBox="0 0 24 24"><path d="M5.5 8.5 9 12l-3.5 3.5L2 12l3.5-3.5Z"/><path d="m12 2 3.5 3.5L12 9 8.5 5.5 12 2Z"/><path d="M18.5 8.5 22 12l-3.5 3.5L15 12l3.5-3.5Z"/><path d="m12 15 3.5 3.5L12 22l-3.5-3.5L12 15Z"/></svg>`,
+  'android': `<svg viewBox="0 0 24 24"><path d="M5 16V8a7 7 0 0 1 14 0v8"/><rect x="3" y="10" width="18" height="8" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><circle cx="8" cy="8" r=".5" fill="currentColor"/><circle cx="16" cy="8" r=".5" fill="currentColor"/></svg>`,
+  'desktop-windows': `<svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>`,
+  'desktop-macos': `<svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>`,
+  'desktop-linux': `<svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>`,
+  'unknown': `<svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,
 };
+
+const ICON_SUN = `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>`;
+const ICON_MOON = `<svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+const ICON_SETTINGS = `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
+const ICON_GLOBE = `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`;
+const ICON_UPLOAD = `<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`;
+const ICON_ARROW_UP = `<svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`;
+const ICON_ARROW_DOWN = `<svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>`;
+const ICON_LOCK = `<svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`;
+const ICON_SHIELD = `<svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`;
+const ICON_GHOST = `<svg viewBox="0 0 24 24"><path d="M9 10h.01M15 10h.01M12 2a8 8 0 0 0-8 8v12l3-3 2.5 2.5L12 19l2.5 2.5L17 19l3 3V10a8 8 0 0 0-8-8z"/></svg>`;
+const ICON_DOWNLOAD_FOLDER = `<svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><polyline points="12 11 12 17"/><polyline points="9 14 12 17 15 14"/></svg>`;
 
 /* ═══════════════════════════════════════
    STATE
@@ -196,13 +208,13 @@ function drawRadar(canvas: HTMLCanvasElement): void {
     const r = (maxR / ringCount) * i;
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.strokeStyle = `rgba(0, 229, 255, ${0.06 - i * 0.01})`;
+    ctx.strokeStyle = `rgba(168, 85, 247, ${0.08 - i * 0.01})`;
     ctx.lineWidth = 0.8;
     ctx.stroke();
   }
 
   // Cross lines
-  ctx.strokeStyle = 'rgba(0, 229, 255, 0.04)';
+  ctx.strokeStyle = 'rgba(168, 85, 247, 0.05)';
   ctx.lineWidth = 0.5;
   ctx.beginPath();
   ctx.moveTo(cx, cy - maxR);
@@ -226,11 +238,11 @@ function drawRadar(canvas: HTMLCanvasElement): void {
   const grad = ctx.createConicGradient(beamAngle - trailAngle, cx, cy);
   const normalizedStart = 0;
   const normalizedEnd = trailAngle / (Math.PI * 2);
-  grad.addColorStop(normalizedStart, 'rgba(0, 229, 255, 0)');
-  grad.addColorStop(normalizedEnd * 0.5, 'rgba(0, 229, 255, 0.04)');
-  grad.addColorStop(normalizedEnd, 'rgba(0, 229, 255, 0.12)');
-  grad.addColorStop(normalizedEnd + 0.001, 'rgba(0, 229, 255, 0)');
-  grad.addColorStop(1, 'rgba(0, 229, 255, 0)');
+  grad.addColorStop(normalizedStart, 'rgba(168, 85, 247, 0)');
+  grad.addColorStop(normalizedEnd * 0.5, 'rgba(168, 85, 247, 0.05)');
+  grad.addColorStop(normalizedEnd, 'rgba(168, 85, 247, 0.16)');
+  grad.addColorStop(normalizedEnd + 0.001, 'rgba(168, 85, 247, 0)');
+  grad.addColorStop(1, 'rgba(168, 85, 247, 0)');
 
   ctx.beginPath();
   ctx.moveTo(cx, cy);
@@ -244,8 +256,8 @@ function drawRadar(canvas: HTMLCanvasElement): void {
   const by = cy + Math.sin(beamAngle) * beamLen;
 
   const lineGrad = ctx.createLinearGradient(cx, cy, bx, by);
-  lineGrad.addColorStop(0, 'rgba(0, 229, 255, 0.5)');
-  lineGrad.addColorStop(1, 'rgba(0, 229, 255, 0)');
+  lineGrad.addColorStop(0, 'rgba(168, 85, 247, 0.7)');
+  lineGrad.addColorStop(1, 'rgba(168, 85, 247, 0)');
 
   ctx.beginPath();
   ctx.moveTo(cx, cy);
@@ -256,23 +268,23 @@ function drawRadar(canvas: HTMLCanvasElement): void {
 
   // Center dot
   ctx.beginPath();
-  ctx.arc(cx, cy, 3, 0, Math.PI * 2);
-  ctx.fillStyle = accentRaw || '#00e5ff';
+  ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+  ctx.fillStyle = accentRaw || '#a855f7';
   ctx.fill();
 
   // Center glow
-  const centerGlow = ctx.createRadialGradient(cx, cy, 0, cx, cy, 20);
-  centerGlow.addColorStop(0, 'rgba(0, 229, 255, 0.2)');
-  centerGlow.addColorStop(1, 'rgba(0, 229, 255, 0)');
+  const centerGlow = ctx.createRadialGradient(cx, cy, 0, cx, cy, 24);
+  centerGlow.addColorStop(0, 'rgba(168, 85, 247, 0.35)');
+  centerGlow.addColorStop(1, 'rgba(168, 85, 247, 0)');
   ctx.beginPath();
-  ctx.arc(cx, cy, 20, 0, Math.PI * 2);
+  ctx.arc(cx, cy, 24, 0, Math.PI * 2);
   ctx.fillStyle = centerGlow;
   ctx.fill();
 
   // Outer glow
   const outerGlow = ctx.createRadialGradient(cx, cy, maxR - 15, cx, cy, maxR + 5);
-  outerGlow.addColorStop(0, 'rgba(0, 229, 255, 0)');
-  outerGlow.addColorStop(1, 'rgba(0, 229, 255, 0.06)');
+  outerGlow.addColorStop(0, 'rgba(168, 85, 247, 0)');
+  outerGlow.addColorStop(1, 'rgba(168, 85, 247, 0.08)');
   ctx.beginPath();
   ctx.arc(cx, cy, maxR + 5, 0, Math.PI * 2);
   ctx.fillStyle = outerGlow;
@@ -329,7 +341,7 @@ function drawParticles(canvas: HTMLCanvasElement): void {
 
     ctx.beginPath();
     ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(0, 229, 255, ${p.opacity})`;
+    ctx.fillStyle = `rgba(168, 85, 247, ${p.opacity})`;
     ctx.fill();
   }
 
@@ -343,7 +355,7 @@ function drawParticles(canvas: HTMLCanvasElement): void {
         ctx.beginPath();
         ctx.moveTo(particles[i].x, particles[i].y);
         ctx.lineTo(particles[j].x, particles[j].y);
-        ctx.strokeStyle = `rgba(0, 229, 255, ${0.06 * (1 - dist / 120)})`;
+        ctx.strokeStyle = `rgba(168, 85, 247, ${0.07 * (1 - dist / 120)})`;
         ctx.lineWidth = 0.5;
         ctx.stroke();
       }
@@ -405,7 +417,7 @@ function openSettings(): void {
       <div class="setting-group">
         <label>${t('theme')}</label>
         <div class="setting-row">
-          <span class="setting-label">${settings.theme === 'dark' ? '🌙' : '☀️'} ${settings.theme === 'dark' ? t('darkMode') : t('lightMode')}</span>
+          <span class="setting-label">${settings.theme === 'dark' ? ICON_MOON : ICON_SUN} ${settings.theme === 'dark' ? t('darkMode') : t('lightMode')}</span>
           <label class="toggle-switch">
             <input type="checkbox" id="theme-toggle-input" ${settings.theme === 'light' ? 'checked' : ''} />
             <span class="toggle-slider"></span>
@@ -430,7 +442,7 @@ function openSettings(): void {
       <div class="setting-group">
         <label>${t('stealthMode')}</label>
         <div class="setting-row">
-          <span class="setting-label">👻 ${t('stealthMode')}</span>
+          <span class="setting-label">${ICON_GHOST} ${t('stealthMode')}</span>
           <label class="toggle-switch">
             <input type="checkbox" id="stealth-toggle-input" ${settings.stealthMode ? 'checked' : ''} />
             <span class="toggle-slider"></span>
@@ -524,10 +536,10 @@ export function renderUI(identity: DeviceIdentity, cbs: UICallbacks): void {
           </div>
           <div class="header-actions">
             <button id="theme-toggle" class="icon-btn" title="${t('theme')}" aria-label="Toggle theme">
-              ${settings.theme === 'dark' ? '☀️' : '🌙'}
+              ${settings.theme === 'dark' ? ICON_SUN : ICON_MOON}
             </button>
             <button id="settings-btn" class="icon-btn" title="${t('settings')}" aria-label="Settings">
-              ⚙️
+              ${ICON_SETTINGS}
             </button>
           </div>
         </div>
@@ -551,18 +563,12 @@ export function renderUI(identity: DeviceIdentity, cbs: UICallbacks): void {
         </section>
 
         <section class="drop-zone-section">
+          <input type="file" id="file-input" multiple style="display:none;position:absolute;left:-9999px" />
           <div id="drop-zone" class="drop-zone">
             <div class="drop-zone-content">
-              <div class="drop-icon">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="17 8 12 3 7 8"/>
-                  <line x1="12" y1="3" x2="12" y2="15"/>
-                </svg>
-              </div>
+              <div class="drop-icon">${ICON_UPLOAD}</div>
               <p>${t('dropTitle')}</p>
               <p class="hint">${t('dropHint')}</p>
-              <input type="file" id="file-input" multiple style="display:none" />
             </div>
           </div>
         </section>
@@ -588,6 +594,7 @@ export function renderUI(identity: DeviceIdentity, cbs: UICallbacks): void {
       </main>
 
       <footer>
+        ${ICON_LOCK}
         <p>${t('footer')}</p>
       </footer>
     </div>
@@ -616,7 +623,7 @@ export function renderUI(identity: DeviceIdentity, cbs: UICallbacks): void {
     applyTheme();
     saveSettings();
     const btn = document.getElementById('theme-toggle');
-    if (btn) btn.innerHTML = settings.theme === 'dark' ? '☀️' : '🌙';
+    if (btn) btn.innerHTML = settings.theme === 'dark' ? ICON_SUN : ICON_MOON;
   });
 
   // Settings button
@@ -733,7 +740,7 @@ export function addTransferEntry(
   entry.id = `transfer-${metadata.fileId}`;
   entry.innerHTML = `
     <div class="transfer-header">
-      <span class="transfer-direction">${direction === 'send' ? '⬆️' : '⬇️'}</span>
+      <span class="transfer-direction ${direction}">${direction === 'send' ? ICON_ARROW_UP : ICON_ARROW_DOWN}</span>
       <span class="transfer-filename" title="${escapeHtml(metadata.fileName)}">${escapeHtml(metadata.fileName)}</span>
       <div class="transfer-meta">
         <span class="transfer-size">${formatSize(metadata.fileSize)}</span>
@@ -816,8 +823,10 @@ function setupDropZone(): void {
     dropZone.classList.add('drag-over');
   });
 
-  dropZone.addEventListener('dragleave', () => {
-    dropZone.classList.remove('drag-over');
+  dropZone.addEventListener('dragleave', (e) => {
+    if (!dropZone.contains(e.relatedTarget as Node)) {
+      dropZone.classList.remove('drag-over');
+    }
   });
 
   dropZone.addEventListener('drop', (e) => {
@@ -827,8 +836,10 @@ function setupDropZone(): void {
     if (files && files.length > 0) handleFilesSelected(files);
   });
 
+  // Open file picker on click — input is outside the drop zone to prevent click bubbling loop
   dropZone.addEventListener('click', () => {
-    document.getElementById('file-input')?.click();
+    const input = document.getElementById('file-input') as HTMLInputElement | null;
+    if (input) input.click();
   });
 }
 
