@@ -12,7 +12,7 @@ interface P2PDropAPI {
   onPeerLost(callback: (deviceId: string) => void): void;
   selectFiles(): Promise<string[]>;
   sendFiles(address: string, port: number, paths: string[]): Promise<{ success?: boolean; error?: string }>;
-  onTransferRequest(callback: (request: { sender: { deviceName: string }; files: Array<{ fileName: string; fileSize: number }> }) => void): void;
+  onTransferRequest(callback: (request: { sender: { deviceName: string }; files: Array<{ fileId: string; fileName: string; fileSize: number }> }) => void): void;
   respondToTransfer(accepted: boolean): void;
   onTransferProgress(callback: (data: { fileId: string; bytesReceived: number; totalBytes: number }) => void): void;
   onSendProgress(callback: (data: { fileId: string; bytesSent: number; totalBytes: number; fileName: string }) => void): void;
@@ -86,7 +86,7 @@ async function init(): Promise<void> {
   });
 
   // Set up transfer events
-  api.onTransferRequest((request: { sender: { deviceName: string }; files: Array<{ fileName: string; fileSize: number }> }) => {
+  api.onTransferRequest((request: { sender: { deviceName: string }; files: Array<{ fileId: string; fileName: string; fileSize: number }> }) => {
     showTransferDialog(request);
   });
 
@@ -136,10 +136,10 @@ function renderPeers(): void {
 
   container.innerHTML = Array.from(peers.values()).map(peer => `
     <div class="peer-card ${selectedPeer?.device.deviceId === peer.device.deviceId ? 'selected' : ''}"
-         data-device-id="${peer.device.deviceId}">
+         data-device-id="${escapeHtml(peer.device.deviceId)}">
       <div class="peer-icon">${platformIcons[peer.device.platform] || '📡'}</div>
-      <div class="peer-name">${peer.device.deviceName}</div>
-      <div class="peer-platform">${peer.device.platform}</div>
+      <div class="peer-name">${escapeHtml(peer.device.deviceName)}</div>
+      <div class="peer-platform">${escapeHtml(peer.device.platform)}</div>
     </div>
   `).join('');
 
@@ -178,16 +178,16 @@ async function handleSendFiles(): Promise<void> {
   }
 }
 
-function showTransferDialog(request: { sender: { deviceName: string }; files: Array<{ fileName: string; fileSize: number }> }): void {
+function showTransferDialog(request: { sender: { deviceName: string }; files: Array<{ fileId: string; fileName: string; fileSize: number }> }): void {
   const container = document.getElementById('dialog-container')!;
   const totalSize = request.files.reduce((sum, f) => sum + f.fileSize, 0);
-  const fileList = request.files.map(f => f.fileName).join(', ');
+  const fileList = request.files.map(f => escapeHtml(f.fileName)).join(', ');
 
   container.innerHTML = `
     <div class="dialog-overlay">
       <div class="dialog">
         <h3>Incoming Transfer</h3>
-        <p><strong>${request.sender.deviceName}</strong> wants to send you:<br/>
+        <p><strong>${escapeHtml(request.sender.deviceName)}</strong> wants to send you:<br/>
         ${fileList}<br/>
         Total: ${formatSize(totalSize)}</p>
         <div class="dialog-actions">
@@ -202,8 +202,7 @@ function showTransferDialog(request: { sender: { deviceName: string }; files: Ar
     api.respondToTransfer(true);
     container.innerHTML = '';
     for (const file of request.files) {
-      const id = Math.random().toString(36).substring(2);
-      transfers.set(id, { fileName: file.fileName, progress: 0, status: 'receiving' });
+      transfers.set(file.fileId, { fileName: file.fileName, progress: 0, status: 'receiving' });
     }
     renderTransfers();
   });
@@ -243,6 +242,12 @@ function renderTransfers(): void {
       <div class="transfer-status">${t.progress >= 0 ? `${(t.progress * 100).toFixed(1)}%` : 'Error'}</div>
     </div>
   `).join('');
+}
+
+function escapeHtml(text: string): string {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
 }
 
 function formatSize(bytes: number): string {

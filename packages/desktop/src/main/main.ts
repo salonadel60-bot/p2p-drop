@@ -187,13 +187,20 @@ function setupIPC(): void {
     const client = new LANTransferClient(`http://${peerAddress}:${peerPort}`);
 
     try {
-      // Build file metadata
-      const files: FileMetadata[] = filePaths.map((filePath) => {
+      // Build file metadata (stream SHA-256 to avoid OOM on large files)
+      const files: FileMetadata[] = [];
+      for (const filePath of filePaths) {
         const stats = fs.statSync(filePath);
         const chunkSize = computeOptimalChunkSize(stats.size);
-        const hash = crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+        const hash = await new Promise<string>((resolve, reject) => {
+          const hasher = crypto.createHash('sha256');
+          const stream = fs.createReadStream(filePath);
+          stream.on('data', (chunk) => hasher.update(chunk));
+          stream.on('end', () => resolve(hasher.digest('hex')));
+          stream.on('error', reject);
+        });
 
-        return {
+        files.push({
           fileId: crypto.randomUUID(),
           fileName: path.basename(filePath),
           mimeType: 'application/octet-stream',
@@ -202,8 +209,8 @@ function setupIPC(): void {
           chunkSize,
           totalChunks: Math.ceil(stats.size / chunkSize),
           lastModified: stats.mtime.toISOString(),
-        };
-      });
+        });
+      }
 
       // Send handshake
       const request: HandshakeRequest = {
