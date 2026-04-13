@@ -4,6 +4,7 @@
  * glassmorphism settings panel, particle background, and i18n (AR/EN).
  */
 
+import jsQR from 'jsqr';
 import type { DeviceIdentity, FileMetadata, ProgressUpdate, TransferState, TransferDirection } from '@p2p-drop/core';
 
 /* ═══════════════════════════════════════
@@ -12,6 +13,7 @@ import type { DeviceIdentity, FileMetadata, ProgressUpdate, TransferState, Trans
 interface UICallbacks {
   onFilesSelected: (files: FileList | File[], peerId: string) => void;
   onPeerClick: (peerId: string) => void;
+  onQRScanned: (data: string) => void;
 }
 
 interface PeerEntry {
@@ -47,6 +49,12 @@ const i18n: Record<string, Record<string, string>> = {
     transfers: 'Transfers',
     pairing: 'Pairing',
     scanConnect: 'Scan to connect',
+    scanQR: 'Scan QR',
+    scannerTitle: 'Scan pairing code',
+    scannerHint: 'Point your camera at another device QR code',
+    scannerStarting: 'Starting camera...',
+    scannerCameraError: 'Camera access failed. Check browser permissions.',
+    scannerFound: 'QR detected — connecting...',
     shareLink: 'Share this link:',
     footer: 'Files are transferred directly between devices — no server involved',
     settings: 'Settings',
@@ -88,6 +96,12 @@ const i18n: Record<string, Record<string, string>> = {
     transfers: 'عمليات النقل',
     pairing: 'الاقتران',
     scanConnect: 'امسح للاتصال',
+    scanQR: 'Scan QR',
+    scannerTitle: 'مسح رمز الاقتران',
+    scannerHint: 'وجّه الكاميرا نحو رمز QR في الجهاز الآخر',
+    scannerStarting: 'جاري تشغيل الكاميرا...',
+    scannerCameraError: 'تعذر فتح الكاميرا. تحقق من صلاحيات المتصفح.',
+    scannerFound: 'تم العثور على الرمز — جاري الاتصال...',
     shareLink: 'شارك هذا الرابط:',
     footer: 'يتم نقل الملفات مباشرة بين الأجهزة — بدون خادم',
     settings: 'الإعدادات',
@@ -146,6 +160,7 @@ const ICON_CHECK_CIRCLE = `<svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 
 const ICON_FILE = `<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`;
 const ICON_X = `<svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
 const ICON_PLUS = `<svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
+const ICON_QR = `<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM19 14h2M14 19h2M19 19h2v2h-4v-2"/></svg>`;
 
 /* ═══════════════════════════════════════
    STATE
@@ -156,6 +171,8 @@ let callbacks: UICallbacks;
 let currentPeers: PeerEntry[] = [];
 let radarAnimId: number | null = null;
 let particleAnimId: number | null = null;
+let scannerAnimId: number | null = null;
+let scannerStream: MediaStream | null = null;
 let beamAngle = 0;
 let settings: Settings;
 
@@ -522,6 +539,106 @@ function closeSettings(): void {
   if (overlay) overlay.remove();
 }
 
+async function openQRScanner(): Promise<void> {
+  closeQRScanner();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'scanner-overlay';
+  overlay.className = 'scanner-overlay';
+  overlay.innerHTML = `
+    <div class="scanner-panel">
+      <div class="scanner-header">
+        <div>
+          <h2>${t('scannerTitle')}</h2>
+          <p>${t('scannerHint')}</p>
+        </div>
+        <button class="close-btn" id="close-scanner" aria-label="${t('close')}">&times;</button>
+      </div>
+      <div class="scanner-viewport">
+        <video id="scanner-video" playsinline muted></video>
+        <canvas id="scanner-canvas"></canvas>
+        <div class="scanner-frame">
+          <span></span><span></span><span></span><span></span>
+        </div>
+        <div class="scanner-line"></div>
+      </div>
+      <p class="scanner-status" id="scanner-status">${t('scannerStarting')}</p>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+  document.getElementById('close-scanner')?.addEventListener('click', closeQRScanner);
+  overlay.addEventListener('click', (event) => {
+    if (event.target === overlay) closeQRScanner();
+  });
+
+  const video = document.getElementById('scanner-video') as HTMLVideoElement | null;
+  const canvas = document.getElementById('scanner-canvas') as HTMLCanvasElement | null;
+  const status = document.getElementById('scanner-status');
+  if (!video || !canvas || !navigator.mediaDevices?.getUserMedia) {
+    status!.textContent = t('scannerCameraError');
+    return;
+  }
+
+  try {
+    scannerStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' } },
+      audio: false,
+    });
+    video.srcObject = scannerStream;
+    await video.play();
+    scanQRCodeFrame(video, canvas);
+  } catch {
+    if (status) status.textContent = t('scannerCameraError');
+    showNotification(t('scannerCameraError'), 'error');
+  }
+}
+
+function scanQRCodeFrame(video: HTMLVideoElement, canvas: HTMLCanvasElement): void {
+  const status = document.getElementById('scanner-status');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return;
+
+  const scan = () => {
+    if (!document.getElementById('scanner-overlay')) return;
+
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imageData.data, imageData.width, imageData.height, {
+        inversionAttempts: 'dontInvert',
+      });
+
+      if (code?.data) {
+        if (status) status.textContent = t('scannerFound');
+        showNotification(t('scannerFound'), 'success');
+        const scannedData = code.data;
+        closeQRScanner();
+        callbacks.onQRScanned(scannedData);
+        return;
+      }
+    }
+
+    scannerAnimId = requestAnimationFrame(scan);
+  };
+
+  scan();
+}
+
+function closeQRScanner(): void {
+  if (scannerAnimId) {
+    cancelAnimationFrame(scannerAnimId);
+    scannerAnimId = null;
+  }
+  if (scannerStream) {
+    scannerStream.getTracks().forEach(track => track.stop());
+    scannerStream = null;
+  }
+  document.getElementById('scanner-overlay')?.remove();
+}
+
 /* ═══════════════════════════════════════
    MAIN RENDER
    ═══════════════════════════════════════ */
@@ -603,6 +720,10 @@ export function renderUI(identity: DeviceIdentity, cbs: UICallbacks): void {
             <div class="qr-container">
               <canvas id="qr-canvas" width="180" height="180"></canvas>
               <p class="hint">${t('scanConnect')}</p>
+              <button id="scan-qr-btn" class="scan-qr-btn" type="button">
+                ${ICON_QR}
+                <span>${t('scanQR')}</span>
+              </button>
             </div>
             <div class="link-container">
               <p>${t('shareLink')}</p>
@@ -647,6 +768,10 @@ export function renderUI(identity: DeviceIdentity, cbs: UICallbacks): void {
 
   // Settings button
   document.getElementById('settings-btn')!.addEventListener('click', openSettings);
+
+  document.getElementById('scan-qr-btn')?.addEventListener('click', () => {
+    void openQRScanner();
+  });
 
   // Listen for system theme changes
   window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', (e) => {

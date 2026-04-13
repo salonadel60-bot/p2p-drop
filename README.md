@@ -9,6 +9,7 @@
 ## Features
 
 - **Futuristic Radar Scanner UI** — Canvas-based radar with rotating scanning beam, proximity-mapped device icons, and signal-strength pulse effects
+- **Integrated QR Pairing Scanner** — In-app camera modal powered by `jsQR` so devices connect from a scanned pairing code without page redirects
 - **Cross-Platform** — Web (WebRTC), Desktop (Electron + mDNS), Android (Kotlin + NSD)
 - **Zero Configuration** — Automatic peer discovery on local network
 - **End-to-End Encrypted** — ECDH key exchange + AES-256-GCM
@@ -87,7 +88,7 @@ npm run build:signaling
 
 ```bash
 npm run dev:web
-# Opens at http://localhost:3000
+# Opens at http://localhost:5000 on Replit/local dev
 # Open in multiple tabs to see peer discovery via BroadcastChannel
 ```
 
@@ -102,8 +103,8 @@ npm run dev:desktop
 
 ```bash
 npm run dev:signaling
-# Runs on port 8080 (configurable via PORT env)
-# Health check: http://localhost:8080/health
+# Runs on port 3001 by default (configurable via PORT env)
+# Health check: http://localhost:3001/health
 ```
 
 ### Run the Android App
@@ -188,6 +189,20 @@ Each icon features:
 
 ---
 
+## Integrated QR Scanner — How It Works
+
+The Pairing area includes both the generated QR code and a **Scan QR** button. Pressing the button opens a glassmorphism camera modal inside the same page, so the app can read another device's pairing code without navigating away.
+
+1. `renderer.ts` opens the camera through `navigator.mediaDevices.getUserMedia()`.
+2. Each video frame is copied to a hidden canvas.
+3. `jsQR` decodes the QR payload from the canvas pixels.
+4. On success, the modal closes and calls `onQRScanned(scannedData)`.
+5. `app.ts` parses that payload and connects to the embedded WebSocket signaling endpoint automatically.
+
+This keeps pairing fast: one device shows the QR, the other taps **Scan QR**, scans it, and joins the same signaling network immediately.
+
+---
+
 ## Settings Panel
 
 Glassmorphism overlay with `backdrop-filter: blur(24px)`:
@@ -198,6 +213,17 @@ Glassmorphism overlay with `backdrop-filter: blur(24px)`:
 | **Language** | Segment control | English (LTR) / العربية (RTL) |
 | **Download Location** | Text input | Storage path (uses File System Access API where available) |
 | **Stealth Mode** | Toggle switch | Hide from other devices' radar |
+
+---
+
+## GitHub Release Readiness
+
+- Main web workflow: `npm run dev:web`
+- Signaling workflow: `npm run dev:signaling`
+- Production static build: `npm run build:prod`
+- Frontend output directory: `packages/web/dist`
+- Required runtime: Node.js 18+
+- No external secrets are required for the web UI, QR scanner, local discovery, or default signaling server.
 
 ---
 

@@ -14,6 +14,7 @@ This is a **npm monorepo** using npm workspaces with the following packages:
 
 ## Tech Stack
 - **Frontend:** Vite 5, TypeScript, WebRTC Data Channels
+- **UI:** Canvas radar, jsQR camera scanner, glassmorphism settings panel
 - **Signaling Server:** Node.js, `ws` (WebSockets)
 - **Crypto:** ECDH P-256 key exchange, AES-256-GCM encryption, SHA-256 integrity
 - **Discovery:** BroadcastChannel (same-origin tabs), WebSocket signaling (cross-network), mDNS/NSD (LAN - desktop/Android only)
@@ -36,6 +37,7 @@ npm run dev:signaling    # Start signaling server (port 3001)
 - Dependencies have been installed for the npm workspace.
 - The Replit workflows run the web app and signaling server separately.
 - Vite is configured for Replit preview access with `host: '0.0.0.0'` and `allowedHosts: true`.
+- The web UI includes a radar device view, a Scan QR camera modal backed by `jsQR`, and settings for save location UI, Arabic/English language, and dark/light mode.
 
 ## Deployment
 - Configured as a **static** deployment
