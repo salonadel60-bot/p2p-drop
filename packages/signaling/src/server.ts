@@ -15,7 +15,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import * as http from 'http';
 
-const PORT = parseInt(process.env.PORT || '8080', 10);
+const PORT = parseInt(process.env.PORT || '3001', 10);
 const HEARTBEAT_INTERVAL = 30_000;
 
 interface DeviceInfo {
