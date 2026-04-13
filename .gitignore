@@ -1,0 +1,17 @@
+node_modules/
+dist/
+build/
+.gradle/
+*.apk
+*.aab
+*.class
+.idea/
+*.iml
+local.properties
+.DS_Store
+*.log
+.env
+.env.local
+coverage/
+.parcel-cache/
+out/

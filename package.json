@@ -1,0 +1,27 @@
+{
+  "name": "p2p-drop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cross-platform P2P file transfer ecosystem - AirDrop + SHAREit + Snapdrop + Nearby Share",
+  "workspaces": [
+    "packages/core",
+    "packages/web",
+    "packages/desktop",
+    "packages/signaling"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "build:core": "npm run build -w packages/core",
+    "build:web": "npm run build -w packages/web",
+    "build:desktop": "npm run build -w packages/desktop",
+    "build:signaling": "npm run build -w packages/signaling",
+    "dev:web": "npm run dev -w packages/web",
+    "dev:desktop": "npm run dev -w packages/desktop",
+    "dev:signaling": "npm run dev -w packages/signaling",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
