@@ -22,7 +22,8 @@ export interface RTCSignalingMessage {
     | 'connection-response'
     | 'media-request'
     | 'media-response'
-    | 'media-stop';
+    | 'media-stop'
+    | 'chat-message';
   sdp?: string;
   candidate?: RTCIceCandidateInit;
   fileTransferId?: string;
@@ -30,6 +31,9 @@ export interface RTCSignalingMessage {
   accepted?: boolean;
   mode?: 'voice' | 'video' | 'screen';
   reason?: string;
+  text?: string;
+  messageId?: string;
+  senderName?: string;
 }
 
 interface SignalEnvelope {

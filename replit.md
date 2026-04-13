@@ -40,9 +40,11 @@ npm run dev:signaling    # Start signaling server (port 3001)
 - Radar devices always show a modern device-name badge instead of only showing names on hover.
 - Automatic live cross-device discovery through same-origin WebSocket signaling.
 - Selecting a radar device now sends a connection request that the other device must accept or reject before WebRTC connects.
+- Text chat is available for the selected radar peer using the live signaling channel, with sent/received message bubbles.
 - QR pairing modal powered by `jsQR` and enlarged QR generation for easier scanning.
 - Short compact `#p=` pairing URLs with click-to-copy behavior on a shortened visible pairing link that still copies the full URL.
 - P2P file transfer over encrypted WebRTC Data Channels.
+- A smarter two-column workspace groups radar discovery beside chat, call controls, and file sending cards for a more compact experience.
 - P2P media room controls for voice, video, and screen sharing between selected peers, including incoming call accept/reject prompts and separate local/remote video tiles.
 - Settings for save-location UI, Arabic/English language, stealth mode, and dark/light mode.
 

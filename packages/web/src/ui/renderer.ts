@@ -16,6 +16,7 @@ interface UICallbacks {
   onQRScanned: (data: string) => void;
   onStartMedia: (peerId: string, mode: 'voice' | 'video' | 'screen') => void;
   onStopMedia: (peerId: string) => void;
+  onSendChat: (peerId: string, text: string) => void;
 }
 
 interface PeerEntry {
@@ -59,6 +60,11 @@ const i18n: Record<string, Record<string, string>> = {
     scannerFound: 'QR detected — connecting...',
     copied: 'Copied',
     mediaRoom: 'P2P Room',
+    chat: 'Chat',
+    chatPlaceholder: 'Write a message...',
+    send: 'Send',
+    chatHint: 'Select a radar device to start chatting',
+    noMessages: 'No messages yet',
     voice: 'Voice',
     video: 'Video',
     screen: 'Screen',
@@ -117,6 +123,11 @@ const i18n: Record<string, Record<string, string>> = {
     scannerFound: 'تم العثور على الرمز — جاري الاتصال...',
     copied: 'تم النسخ',
     mediaRoom: 'غرفة P2P',
+    chat: 'الشات',
+    chatPlaceholder: 'اكتب رسالة...',
+    send: 'إرسال',
+    chatHint: 'اختر جهازاً من الرادار لبدء المحادثة',
+    noMessages: 'لا توجد رسائل بعد',
     voice: 'صوت',
     video: 'فيديو',
     screen: 'الشاشة',
@@ -200,6 +211,7 @@ let scannerStream: MediaStream | null = null;
 let beamAngle = 0;
 let settings: Settings;
 let mediaActive = false;
+let chatMessages: Array<{ peerId: string; text: string; direction: 'sent' | 'received'; senderName: string; timestamp: number }> = [];
 
 function t(key: string): string {
   return i18n[settings.language]?.[key] || i18n['en'][key] || key;
@@ -707,7 +719,12 @@ export function renderUI(identity: DeviceIdentity, cbs: UICallbacks): void {
       </header>
 
       <main>
-        <section class="radar-section">
+        <div class="experience-grid">
+        <section class="radar-section smart-card">
+          <div class="section-heading">
+            <h2>${t('scanning')}</h2>
+            <span id="radar-count">${currentPeers.length} online</span>
+          </div>
           <div class="radar-wrapper" id="radar-wrapper">
             <canvas class="radar-canvas" id="radar-canvas"></canvas>
             <div class="radar-overlay"></div>
@@ -723,19 +740,26 @@ export function renderUI(identity: DeviceIdentity, cbs: UICallbacks): void {
           </div>
         </section>
 
-        <section class="drop-zone-section">
-          <input type="file" id="file-input" multiple style="display:none;position:absolute;left:-9999px" />
-          <div id="drop-zone" class="drop-zone">
-            <div class="drop-zone-content">
-              <div class="drop-icon">${ICON_UPLOAD}</div>
-              <p>${t('dropTitle')}</p>
-              <p class="hint">${t('dropHint')}</p>
+        <div class="workspace-column">
+          <section class="chat-section smart-card">
+            <div class="section-heading">
+              <h2>${t('chat')}</h2>
+              <span id="chat-peer-label">${t('chatHint')}</span>
             </div>
-          </div>
-        </section>
+            <div class="chat-messages" id="chat-messages">
+              <div class="chat-empty">${t('noMessages')}</div>
+            </div>
+            <form class="chat-composer" id="chat-form">
+              <input id="chat-input" type="text" maxlength="800" placeholder="${t('chatPlaceholder')}" disabled />
+              <button id="chat-send-btn" type="submit" disabled>${t('send')}</button>
+            </form>
+          </section>
 
-        <section class="media-section">
-          <h2>${t('mediaRoom')}</h2>
+        <section class="media-section smart-card">
+          <div class="section-heading">
+            <h2>${t('mediaRoom')}</h2>
+            <span id="media-peer-label">${t('choosePeerMedia')}</span>
+          </div>
           <div class="media-controls">
             <button class="media-btn" data-media-mode="voice" disabled>${t('voice')}</button>
             <button class="media-btn" data-media-mode="video" disabled>${t('video')}</button>
@@ -756,12 +780,29 @@ export function renderUI(identity: DeviceIdentity, cbs: UICallbacks): void {
           </div>
         </section>
 
-        <section class="transfers-section" id="transfers-section" style="display:none">
+        <section class="drop-zone-section smart-card">
+          <div class="section-heading">
+            <h2>${t('dropTitle')}</h2>
+            <span>${t('dropHint')}</span>
+          </div>
+          <input type="file" id="file-input" multiple style="display:none;position:absolute;left:-9999px" />
+          <div id="drop-zone" class="drop-zone">
+            <div class="drop-zone-content">
+              <div class="drop-icon">${ICON_UPLOAD}</div>
+              <p>${t('dropTitle')}</p>
+              <p class="hint">${t('dropHint')}</p>
+            </div>
+          </div>
+        </section>
+        </div>
+        </div>
+
+        <section class="transfers-section smart-card" id="transfers-section" style="display:none">
           <h2>${t('transfers')}</h2>
           <div id="transfers-list" class="transfers-list"></div>
         </section>
 
-        <section class="pairing-section">
+        <section class="pairing-section smart-card">
           <h2>${t('pairing')}</h2>
           <div class="pairing-options">
             <div class="qr-container">
@@ -838,6 +879,16 @@ export function renderUI(identity: DeviceIdentity, cbs: UICallbacks): void {
 
   document.getElementById('media-stop-btn')?.addEventListener('click', () => {
     if (selectedPeerId) callbacks.onStopMedia(selectedPeerId);
+  });
+
+  document.getElementById('chat-form')?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const input = document.getElementById('chat-input') as HTMLInputElement | null;
+    const text = input?.value.trim() ?? '';
+    if (!selectedPeerId || !text) return;
+    callbacks.onSendChat(selectedPeerId, text);
+    addChatMessage(selectedPeerId, text, 'sent', currentIdentity.deviceName);
+    if (input) input.value = '';
   });
 
   // Listen for system theme changes
@@ -923,6 +974,7 @@ function renderRadarDevices(): void {
       } else {
         callbacks.onPeerClick(peerId);
       }
+      renderChatMessages();
     });
   });
 }
@@ -937,6 +989,15 @@ function updateMediaButtons(): void {
     stopBtn.style.display = mediaActive ? 'inline-flex' : 'none';
     stopBtn.disabled = !mediaActive;
   }
+  const chatInput = document.getElementById('chat-input') as HTMLInputElement | null;
+  const chatButton = document.getElementById('chat-send-btn') as HTMLButtonElement | null;
+  const selectedPeer = currentPeers.find(peer => peer.id === selectedPeerId);
+  const chatPeerLabel = document.getElementById('chat-peer-label');
+  const mediaPeerLabel = document.getElementById('media-peer-label');
+  if (chatInput) chatInput.disabled = !enabled;
+  if (chatButton) chatButton.disabled = !enabled;
+  if (chatPeerLabel) chatPeerLabel.textContent = selectedPeer ? selectedPeer.device.deviceName : t('chatHint');
+  if (mediaPeerLabel) mediaPeerLabel.textContent = selectedPeer ? selectedPeer.device.deviceName : t('choosePeerMedia');
 }
 
 export function updatePeerList(peers: Array<{ id: string; device: DeviceIdentity; connected: boolean }>): void {
@@ -951,6 +1012,42 @@ export function updatePeerList(peers: Array<{ id: string; device: DeviceIdentity
   });
 
   renderRadarDevices();
+  const radarCount = document.getElementById('radar-count');
+  if (radarCount) radarCount.textContent = `${currentPeers.length} online`;
+  updateMediaButtons();
+  renderChatMessages();
+}
+
+export function addChatMessage(peerId: string, text: string, direction: 'sent' | 'received', senderName: string): void {
+  chatMessages.push({ peerId, text, direction, senderName, timestamp: Date.now() });
+  if (chatMessages.length > 250) chatMessages = chatMessages.slice(-250);
+  if (!selectedPeerId && direction === 'received') {
+    selectedPeerId = peerId;
+    renderRadarDevices();
+  }
+  renderChatMessages();
+}
+
+function renderChatMessages(): void {
+  const container = document.getElementById('chat-messages');
+  if (!container) return;
+  const visibleMessages = selectedPeerId
+    ? chatMessages.filter(message => message.peerId === selectedPeerId)
+    : [];
+
+  if (visibleMessages.length === 0) {
+    container.innerHTML = `<div class="chat-empty">${selectedPeerId ? t('noMessages') : t('chatHint')}</div>`;
+    updateMediaButtons();
+    return;
+  }
+
+  container.innerHTML = visibleMessages.map(message => `
+    <div class="chat-bubble ${message.direction}">
+      <div>${escapeHtml(message.text)}</div>
+      <span>${escapeHtml(message.senderName)} · ${new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+    </div>
+  `).join('');
+  container.scrollTop = container.scrollHeight;
   updateMediaButtons();
 }
 

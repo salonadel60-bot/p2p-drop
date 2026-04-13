@@ -30,7 +30,7 @@ import {
 } from './webrtc/index.js';
 import type { RTCSignalingMessage } from './webrtc/index.js';
 import { BrowserFileSource, BrowserFileSink, computeFileSHA256 } from './ui/file-handler.js';
-import { renderUI, updatePeerList, updateTransferProgress, showNotification, addTransferEntry, updateTransferState, updateMediaRoom, showActionRequest, setPairingLink } from './ui/renderer.js';
+import { renderUI, updatePeerList, updateTransferProgress, showNotification, addTransferEntry, updateTransferState, updateMediaRoom, showActionRequest, setPairingLink, addChatMessage } from './ui/renderer.js';
 
 interface PeerState {
   device: DeviceIdentity;
@@ -64,6 +64,7 @@ class P2PDropApp {
       onQRScanned: (data) => this.handleQRScanned(data),
       onStartMedia: (peerId, mode) => void this.startMedia(peerId, mode),
       onStopMedia: (peerId) => this.stopMedia(peerId),
+      onSendChat: (peerId, text) => this.sendChatMessage(peerId, text),
     });
 
     const params = new URLSearchParams(window.location.search);
@@ -344,6 +345,11 @@ class P2PDropApp {
       return;
     }
 
+    if (msg.type === 'chat-message') {
+      this.handleIncomingChat(from, msg);
+      return;
+    }
+
     if (msg.fileTransferId === 'media') {
       await this.handleMediaSignaling(from, msg);
       return;
@@ -481,6 +487,36 @@ class P2PDropApp {
   private sendConnectionSignal(peerId: string, msg: RTCSignalingMessage): void {
     this.localSignaling?.sendSignaling(peerId, msg);
     this.wsSignaling?.sendSignaling(peerId, msg);
+  }
+
+  private sendChatMessage(peerId: string, text: string): void {
+    const peer = this.peers.get(peerId);
+    if (!peer) {
+      showNotification('Select a peer first', 'error');
+      return;
+    }
+
+    this.localSignaling?.sendSignaling(peerId, {
+      type: 'chat-message',
+      text,
+      messageId: crypto.randomUUID(),
+      senderName: this.identity.deviceName,
+    });
+    this.wsSignaling?.sendSignaling(peerId, {
+      type: 'chat-message',
+      text,
+      messageId: crypto.randomUUID(),
+      senderName: this.identity.deviceName,
+    });
+  }
+
+  private handleIncomingChat(peerId: string, msg: RTCSignalingMessage): void {
+    const text = msg.text?.trim();
+    if (!text) return;
+    const peer = this.peers.get(peerId);
+    const senderName = msg.senderName ?? peer?.device.deviceName ?? 'Peer';
+    addChatMessage(peerId, text, 'received', senderName);
+    showNotification(`New message from ${senderName}`, 'info');
   }
 
   private async startMedia(peerId: string, mode: 'voice' | 'video' | 'screen'): Promise<void> {
