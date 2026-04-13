@@ -11,7 +11,7 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces",
-    "build:prod": "npm run build:core && npm run build:web",
+    "build:prod": "npm run build:core && npm run build:web && npm run build:signaling",
     "build:core": "npm run build -w packages/core",
     "build:web": "npm run build -w packages/web",
     "build:desktop": "npm run build -w packages/desktop",
@@ -20,7 +20,8 @@
     "dev:desktop": "npm run dev -w packages/desktop",
     "dev:signaling": "npm run dev -w packages/signaling",
     "lint": "npm run lint --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "start:prod": "npm run start -w packages/signaling"
   },
   "engines": {
     "node": ">=18.0.0"

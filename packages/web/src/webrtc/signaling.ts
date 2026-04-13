@@ -10,6 +10,7 @@ export interface SignalingEvents {
   onPeerJoined: (peer: DeviceIdentity, peerId: string) => void;
   onPeerLeft: (peerId: string) => void;
   onSignalingMessage: (from: string, message: RTCSignalingMessage) => void;
+  onConnectionStateChange?: (connected: boolean) => void;
 }
 
 export interface RTCSignalingMessage {
@@ -22,6 +23,7 @@ export interface RTCSignalingMessage {
 interface SignalEnvelope {
   action: 'announce' | 'leave' | 'signal';
   senderId: string;
+  clientId?: string;
   senderDevice?: DeviceIdentity;
   targetId?: string;
   payload?: RTCSignalingMessage;
@@ -122,24 +124,32 @@ export class WebSocketSignaling {
   private ws: WebSocket | null = null;
   private peers = new Map<string, DeviceIdentity>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private announceTimer: ReturnType<typeof setInterval> | null = null;
+  private intentionallyClosed = false;
   private _connected = false;
 
   constructor(
     private readonly deviceId: string,
     private readonly device: DeviceIdentity,
     private readonly serverUrl: string,
+    private readonly clientId: string,
     private readonly events: SignalingEvents
   ) {}
 
   get connected(): boolean { return this._connected; }
+  get url(): string { return this.serverUrl; }
 
   connect(): void {
+    if (this.ws?.readyState === WebSocket.OPEN || this.ws?.readyState === WebSocket.CONNECTING) return;
+    this.intentionallyClosed = false;
     try {
       this.ws = new WebSocket(this.serverUrl);
 
       this.ws.onopen = () => {
         this._connected = true;
+        this.events.onConnectionStateChange?.(true);
         this.announce();
+        this.announceTimer = setInterval(() => this.announce(), 5000);
       };
 
       this.ws.onmessage = (ev: MessageEvent) => {
@@ -153,11 +163,19 @@ export class WebSocketSignaling {
 
       this.ws.onclose = () => {
         this._connected = false;
-        this.scheduleReconnect();
+        if (this.announceTimer) {
+          clearInterval(this.announceTimer);
+          this.announceTimer = null;
+        }
+        this.events.onConnectionStateChange?.(false);
+        if (!this.intentionallyClosed) {
+          this.scheduleReconnect();
+        }
       };
 
       this.ws.onerror = () => {
         this._connected = false;
+        this.events.onConnectionStateChange?.(false);
       };
     } catch {
       this.scheduleReconnect();
@@ -165,15 +183,26 @@ export class WebSocketSignaling {
   }
 
   disconnect(): void {
+    this.intentionallyClosed = true;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
+    }
+    if (this.announceTimer) {
+      clearInterval(this.announceTimer);
+      this.announceTimer = null;
     }
     if (this.ws) {
       this.sendEnvelope({ action: 'leave', senderId: this.deviceId, timestamp: Date.now() });
       this.ws.close();
       this.ws = null;
     }
+    this._connected = false;
+    this.events.onConnectionStateChange?.(false);
+  }
+
+  refresh(): void {
+    this.announce();
   }
 
   sendSignaling(targetId: string, message: RTCSignalingMessage): void {
@@ -197,16 +226,17 @@ export class WebSocketSignaling {
 
   private sendEnvelope(envelope: SignalEnvelope): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(envelope));
+      this.ws.send(JSON.stringify({ ...envelope, clientId: this.clientId }));
     }
   }
 
   private handleMessage(envelope: SignalEnvelope): void {
     if (envelope.senderId === this.deviceId) return;
+    if (envelope.clientId === this.clientId) return;
 
     switch (envelope.action) {
       case 'announce':
-        if (envelope.senderDevice) {
+        if (envelope.clientId && envelope.senderDevice) {
           const isNew = !this.peers.has(envelope.senderId);
           this.peers.set(envelope.senderId, envelope.senderDevice);
           if (isNew) {

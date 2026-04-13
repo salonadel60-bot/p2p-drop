@@ -40,7 +40,7 @@ interface PeerState {
 
 class P2PDropApp {
   private identity!: DeviceIdentity;
-  private localSignaling!: LocalSignaling;
+  private localSignaling: LocalSignaling | null = null;
   private wsSignaling: WebSocketSignaling | null = null;
   private peers = new Map<string, PeerState>();
   private activeTransfers = new Map<string, { sender?: FileSender; receiver?: FileReceiver; sink?: BrowserFileSink }>();
@@ -48,6 +48,7 @@ class P2PDropApp {
   private localMediaStream: MediaStream | null = null;
   private remoteMediaStreams = new Map<string, MediaStream>();
   private mediaMode: 'voice' | 'video' | 'screen' | null = null;
+  private browserClientId = this.getBrowserClientId();
 
   async init(): Promise<void> {
     // Get or create device identity
@@ -62,17 +63,19 @@ class P2PDropApp {
       onStopMedia: (peerId) => this.stopMedia(peerId),
     });
 
-    // Start local signaling (BroadcastChannel for same-origin tabs)
-    this.localSignaling = new LocalSignaling(
-      this.identity.deviceId,
-      this.identity,
-      {
-        onPeerJoined: (device, peerId) => this.handlePeerJoined(device, peerId),
-        onPeerLeft: (peerId) => this.handlePeerLeft(peerId),
-        onSignalingMessage: (from, msg) => this.handleSignalingMessage(from, msg),
-      }
-    );
-    this.localSignaling.start();
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('localTabs') === '1') {
+      this.localSignaling = new LocalSignaling(
+        this.identity.deviceId,
+        this.identity,
+        {
+          onPeerJoined: (device, peerId) => this.handlePeerJoined(device, peerId),
+          onPeerLeft: (peerId) => this.handlePeerLeft(peerId),
+          onSignalingMessage: (from, msg) => this.handleSignalingMessage(from, msg),
+        }
+      );
+      this.localSignaling.start();
+    }
 
     // Try WebSocket signaling if available
     this.tryWebSocketSignaling();
@@ -84,41 +87,74 @@ class P2PDropApp {
   }
 
   private tryWebSocketSignaling(): void {
-    // Check for signaling server URL in URL params
     const params = new URLSearchParams(window.location.search);
-    const signalingUrl = params.get('signaling');
-    if (signalingUrl) {
-      this.wsSignaling = new WebSocketSignaling(
-        this.identity.deviceId,
-        this.identity,
-        signalingUrl,
-        {
-          onPeerJoined: (device, peerId) => this.handlePeerJoined(device, peerId),
-          onPeerLeft: (peerId) => this.handlePeerLeft(peerId),
-          onSignalingMessage: (from, msg) => this.handleSignalingMessage(from, msg),
-        }
-      );
-      this.wsSignaling.connect();
-    }
+    this.connectToSignalingServer(params.get('signaling') ?? this.getSignalingURL(), false);
   }
 
   private getSignalingURL(): string {
-    // 1. Explicit override via URL param
     const params = new URLSearchParams(window.location.search);
     const fromParam = params.get('signaling');
     if (fromParam) return fromParam;
 
-    // 2. Derive from current page URL
-    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.hostname;
+    const url = new URL('/signaling', window.location.href);
+    url.protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    url.searchParams.set('room', 'public');
+    return url.toString();
+  }
 
-    // Local development
-    if (host === 'localhost' || host === '127.0.0.1') {
-      return `ws://localhost:3001`;
+  private connectToSignalingServer(signalingUrl: string, notify: boolean): void {
+    const normalizedUrl = this.normalizeSignalingURL(signalingUrl);
+    if (this.wsSignaling?.url === normalizedUrl) {
+      if (this.wsSignaling.connected) {
+        this.wsSignaling.refresh();
+        if (notify) showNotification('Refreshing live device discovery...', 'info');
+      } else {
+        this.wsSignaling.connect();
+        if (notify) showNotification('Reconnecting to live device discovery...', 'info');
+      }
+      return;
     }
 
-    // Deployed (Replit, Vercel, etc.) — signaling on port 3001 same host
-    return `${proto}//${host}:3001`;
+    this.wsSignaling?.disconnect();
+    this.wsSignaling = new WebSocketSignaling(
+      this.identity.deviceId,
+      this.identity,
+      normalizedUrl,
+      this.browserClientId,
+      {
+        onPeerJoined: (device, peerId) => this.handlePeerJoined(device, peerId),
+        onPeerLeft: (peerId) => this.handlePeerLeft(peerId),
+        onSignalingMessage: (from, msg) => this.handleSignalingMessage(from, msg),
+        onConnectionStateChange: (connected) => {
+          console.log(`[P2P Drop] Live signaling ${connected ? 'connected' : 'disconnected'}: ${normalizedUrl}`);
+          if (notify) {
+            showNotification(
+              connected ? 'Live device discovery connected' : 'Live device discovery disconnected — retrying...',
+              connected ? 'success' : 'warning'
+            );
+          }
+        },
+      }
+    );
+    this.wsSignaling.connect();
+  }
+
+  private normalizeSignalingURL(value: string): string {
+    const url = new URL(value, window.location.href);
+    if (url.protocol === 'http:') url.protocol = 'ws:';
+    if (url.protocol === 'https:') url.protocol = 'wss:';
+    if (!url.searchParams.has('room')) url.searchParams.set('room', 'public');
+    return url.toString();
+  }
+
+  private getBrowserClientId(): string {
+    const key = 'p2p-drop-browser-client-id';
+    let value = localStorage.getItem(key);
+    if (!value) {
+      value = crypto.randomUUID();
+      localStorage.setItem(key, value);
+    }
+    return value;
   }
 
   private setupPairing(): void {
@@ -199,25 +235,12 @@ class P2PDropApp {
     showNotification(`Connecting to ${parsed.deviceName}...`, 'info');
     console.log('[P2P Drop] QR scanned, connecting via', signalingUrl);
 
-    // If already connected to the same signaling server, skip reconnect
-    if (this.wsSignaling) {
-      showNotification(`Already on a signaling network — device should appear on radar`, 'info');
+    if (parsed.deviceId === this.identity.deviceId) {
+      showNotification('This is your own QR code — scan the code on the other device', 'warning');
       return;
     }
 
-    // Connect to the signaling server from the QR code
-    this.wsSignaling = new WebSocketSignaling(
-      this.identity.deviceId,
-      this.identity,
-      signalingUrl,
-      {
-        onPeerJoined: (device, peerId) => this.handlePeerJoined(device, peerId),
-        onPeerLeft: (peerId) => this.handlePeerLeft(peerId),
-        onSignalingMessage: (from, msg) => this.handleSignalingMessage(from, msg),
-      }
-    );
-    this.wsSignaling.connect();
-    showNotification(`Joined network — ${parsed.deviceName} should appear on radar`, 'success');
+    this.connectToSignalingServer(signalingUrl, true);
   }
 
   private encodePairingPayload(payload: { p2pd: number; d: string; n: string; e: string; c: string; x: string }): string {
@@ -308,7 +331,7 @@ class P2PDropApp {
     if (!peer) return;
 
     const sendSignaling = (targetId: string, msg: RTCSignalingMessage) => {
-      this.localSignaling.sendSignaling(targetId, msg);
+      this.localSignaling?.sendSignaling(targetId, msg);
       this.wsSignaling?.sendSignaling(targetId, msg);
     };
 
@@ -495,7 +518,7 @@ class P2PDropApp {
   }
 
   private sendMediaSignal(peerId: string, msg: RTCSignalingMessage): void {
-    this.localSignaling.sendSignaling(peerId, msg);
+    this.localSignaling?.sendSignaling(peerId, msg);
     this.wsSignaling?.sendSignaling(peerId, msg);
   }
 

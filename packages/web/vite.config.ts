@@ -17,5 +17,11 @@ export default defineConfig({
     strictPort: true,
     host: '0.0.0.0',
     allowedHosts: true,
+    proxy: {
+      '/signaling': {
+        target: 'ws://127.0.0.1:3001',
+        ws: true,
+      },
+    },
   },
 });
