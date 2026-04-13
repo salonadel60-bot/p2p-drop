@@ -63,6 +63,10 @@ const i18n: Record<string, Record<string, string>> = {
     video: 'Video',
     screen: 'Screen',
     stopMedia: 'Stop',
+    you: 'You',
+    remotePeer: 'Remote',
+    accept: 'Accept',
+    reject: 'Reject',
     choosePeerMedia: 'Select a radar device to start voice, video, or screen sharing',
     shareLink: 'Share this link:',
     footer: 'Files are transferred directly between devices — no server involved',
@@ -117,6 +121,10 @@ const i18n: Record<string, Record<string, string>> = {
     video: 'فيديو',
     screen: 'الشاشة',
     stopMedia: 'إيقاف',
+    you: 'أنت',
+    remotePeer: 'الطرف الآخر',
+    accept: 'قبول',
+    reject: 'رفض',
     choosePeerMedia: 'اختر جهازاً من الرادار لبدء الصوت أو الفيديو أو مشاركة الشاشة',
     shareLink: 'شارك هذا الرابط:',
     footer: 'يتم نقل الملفات مباشرة بين الأجهزة — بدون خادم',
@@ -191,6 +199,7 @@ let scannerAnimId: number | null = null;
 let scannerStream: MediaStream | null = null;
 let beamAngle = 0;
 let settings: Settings;
+let mediaActive = false;
 
 function t(key: string): string {
   return i18n[settings.language]?.[key] || i18n['en'][key] || key;
@@ -731,12 +740,18 @@ export function renderUI(identity: DeviceIdentity, cbs: UICallbacks): void {
             <button class="media-btn" data-media-mode="voice" disabled>${t('voice')}</button>
             <button class="media-btn" data-media-mode="video" disabled>${t('video')}</button>
             <button class="media-btn" data-media-mode="screen" disabled>${t('screen')}</button>
-            <button class="media-btn media-stop" id="media-stop-btn" disabled>${t('stopMedia')}</button>
+            <button class="media-btn media-stop" id="media-stop-btn" style="display:none" disabled>${t('stopMedia')}</button>
           </div>
           <p class="media-hint" id="media-hint">${t('choosePeerMedia')}</p>
           <div class="media-room" id="media-room" style="display:none">
-            <video id="remote-media" autoplay playsinline></video>
-            <video id="local-media" autoplay playsinline muted></video>
+            <div class="media-tile remote-tile">
+              <span>${t('remotePeer')}</span>
+              <video id="remote-media" autoplay playsinline></video>
+            </div>
+            <div class="media-tile local-tile">
+              <span>${t('you')}</span>
+              <video id="local-media" autoplay playsinline muted></video>
+            </div>
             <p id="media-label"></p>
           </div>
         </section>
@@ -806,7 +821,8 @@ export function renderUI(identity: DeviceIdentity, cbs: UICallbacks): void {
   });
 
   document.getElementById('pairing-url')?.addEventListener('click', async (event) => {
-    const text = (event.currentTarget as HTMLElement).textContent ?? '';
+    const element = event.currentTarget as HTMLElement;
+    const text = element.dataset.fullUrl ?? element.textContent ?? '';
     if (!text) return;
     await navigator.clipboard.writeText(text);
     showNotification(t('copied'), 'success');
@@ -893,7 +909,6 @@ function renderRadarDevices(): void {
     el.addEventListener('click', () => {
       const peerId = (el as HTMLElement).dataset.peerId!;
       selectedPeerId = peerId;
-      callbacks.onPeerClick(peerId);
       updateMediaButtons();
 
       // Update selection visuals
@@ -905,6 +920,8 @@ function renderRadarDevices(): void {
         callbacks.onFilesSelected([...pendingFiles], peerId);
         pendingFiles = [];
         setTimeout(renderDropZoneContent, 300);
+      } else {
+        callbacks.onPeerClick(peerId);
       }
     });
   });
@@ -912,9 +929,14 @@ function renderRadarDevices(): void {
 
 function updateMediaButtons(): void {
   const enabled = Boolean(selectedPeerId);
-  document.querySelectorAll<HTMLButtonElement>('.media-btn').forEach(btn => {
+  document.querySelectorAll<HTMLButtonElement>('.media-btn[data-media-mode]').forEach(btn => {
     btn.disabled = !enabled;
   });
+  const stopBtn = document.getElementById('media-stop-btn') as HTMLButtonElement | null;
+  if (stopBtn) {
+    stopBtn.style.display = mediaActive ? 'inline-flex' : 'none';
+    stopBtn.disabled = !mediaActive;
+  }
 }
 
 export function updatePeerList(peers: Array<{ id: string; device: DeviceIdentity; connected: boolean }>): void {
@@ -936,7 +958,8 @@ export function updateMediaRoom(
   localStream: MediaStream | null,
   remoteStream: MediaStream | null,
   mode: 'voice' | 'video' | 'screen' | null,
-  peerName: string
+  peerName: string,
+  peerId?: string
 ): void {
   const room = document.getElementById('media-room');
   const localVideo = document.getElementById('local-media') as HTMLVideoElement | null;
@@ -944,10 +967,56 @@ export function updateMediaRoom(
   const label = document.getElementById('media-label');
   if (!room || !localVideo || !remoteVideo || !label) return;
 
+  if (peerId) {
+    selectedPeerId = peerId;
+    renderRadarDevices();
+  }
+
   localVideo.srcObject = localStream;
   remoteVideo.srcObject = remoteStream;
-  room.style.display = localStream || remoteStream ? 'grid' : 'none';
+  mediaActive = Boolean(localStream || remoteStream);
+  room.style.display = mediaActive ? 'grid' : 'none';
   label.textContent = mode ? `${mode.toUpperCase()} · ${peerName}` : '';
+  updateMediaButtons();
+}
+
+export function setPairingLink(fullURL: string, visibleURL: string): void {
+  const pairingElement = document.getElementById('pairing-url');
+  if (!pairingElement) return;
+  pairingElement.textContent = visibleURL;
+  pairingElement.dataset.fullUrl = fullURL;
+  pairingElement.title = fullURL;
+}
+
+export function showActionRequest(
+  title: string,
+  message: string,
+  acceptText = t('accept'),
+  rejectText = t('reject')
+): Promise<boolean> {
+  document.getElementById('request-overlay')?.remove();
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.id = 'request-overlay';
+    overlay.className = 'request-overlay';
+    overlay.innerHTML = `
+      <div class="request-panel">
+        <h3>${escapeHtml(title)}</h3>
+        <p>${escapeHtml(message)}</p>
+        <div class="request-actions">
+          <button class="request-btn reject" id="request-reject">${escapeHtml(rejectText)}</button>
+          <button class="request-btn accept" id="request-accept">${escapeHtml(acceptText)}</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const finish = (accepted: boolean) => {
+      overlay.remove();
+      resolve(accepted);
+    };
+    document.getElementById('request-accept')?.addEventListener('click', () => finish(true));
+    document.getElementById('request-reject')?.addEventListener('click', () => finish(false));
+  });
 }
 
 /* ═══════════════════════════════════════

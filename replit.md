@@ -37,11 +37,13 @@ npm run dev:signaling    # Start signaling server (port 3001)
 
 ## Current Web Features
 - Radar-style peer discovery UI with animated canvas scanning and proximity-mapped device nodes.
+- Radar devices always show a modern device-name badge instead of only showing names on hover.
 - Automatic live cross-device discovery through same-origin WebSocket signaling.
+- Selecting a radar device now sends a connection request that the other device must accept or reject before WebRTC connects.
 - QR pairing modal powered by `jsQR` and enlarged QR generation for easier scanning.
-- Short compact `#p=` pairing URLs with click-to-copy behavior on the pairing link.
+- Short compact `#p=` pairing URLs with click-to-copy behavior on a shortened visible pairing link that still copies the full URL.
 - P2P file transfer over encrypted WebRTC Data Channels.
-- P2P media room controls for voice, video, and screen sharing between selected peers.
+- P2P media room controls for voice, video, and screen sharing between selected peers, including incoming call accept/reject prompts and separate local/remote video tiles.
 - Settings for save-location UI, Arabic/English language, stealth mode, and dark/light mode.
 
 ## Replit Migration Status

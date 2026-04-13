@@ -14,10 +14,22 @@ export interface SignalingEvents {
 }
 
 export interface RTCSignalingMessage {
-  type: 'offer' | 'answer' | 'ice-candidate';
+  type:
+    | 'offer'
+    | 'answer'
+    | 'ice-candidate'
+    | 'connection-request'
+    | 'connection-response'
+    | 'media-request'
+    | 'media-response'
+    | 'media-stop';
   sdp?: string;
   candidate?: RTCIceCandidateInit;
   fileTransferId?: string;
+  requestId?: string;
+  accepted?: boolean;
+  mode?: 'voice' | 'video' | 'screen';
+  reason?: string;
 }
 
 interface SignalEnvelope {

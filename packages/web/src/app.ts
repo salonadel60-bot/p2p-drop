@@ -30,7 +30,7 @@ import {
 } from './webrtc/index.js';
 import type { RTCSignalingMessage } from './webrtc/index.js';
 import { BrowserFileSource, BrowserFileSink, computeFileSHA256 } from './ui/file-handler.js';
-import { renderUI, updatePeerList, updateTransferProgress, showNotification, addTransferEntry, updateTransferState, updateMediaRoom } from './ui/renderer.js';
+import { renderUI, updatePeerList, updateTransferProgress, showNotification, addTransferEntry, updateTransferState, updateMediaRoom, showActionRequest, setPairingLink } from './ui/renderer.js';
 
 interface PeerState {
   device: DeviceIdentity;
@@ -48,6 +48,9 @@ class P2PDropApp {
   private localMediaStream: MediaStream | null = null;
   private remoteMediaStreams = new Map<string, MediaStream>();
   private mediaMode: 'voice' | 'video' | 'screen' | null = null;
+  private activeMediaPeerId: string | null = null;
+  private pendingConnectionResponses = new Map<string, (accepted: boolean) => void>();
+  private pendingMediaResponses = new Map<string, (accepted: boolean) => void>();
   private browserClientId = this.getBrowserClientId();
 
   async init(): Promise<void> {
@@ -178,7 +181,7 @@ class P2PDropApp {
     // Display pairing URL in the UI
     const pairingElement = document.getElementById('pairing-url');
     if (pairingElement) {
-      pairingElement.textContent = pairingURL;
+      setPairingLink(pairingURL, this.shortenPairingURL(pairingURL));
     }
 
     this.generateQRCode(`p2pd:${encoded}`);
@@ -250,6 +253,14 @@ class P2PDropApp {
     return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   }
 
+  private shortenPairingURL(pairingURL: string): string {
+    const hashIndex = pairingURL.indexOf('#p=');
+    if (hashIndex === -1) return pairingURL;
+    const prefix = pairingURL.slice(0, Math.min(hashIndex + 3, 34));
+    const token = pairingURL.slice(hashIndex + 3);
+    return `${prefix}${token.slice(0, 8)}…${token.slice(-6)}`;
+  }
+
   private parseCompactPairing(raw: string): { deviceId: string; deviceName: string; endpoint: string; pairingCode: string; expiresAt: string } | null {
     const value = raw.startsWith('p2pd:')
       ? raw.slice(5)
@@ -308,6 +319,31 @@ class P2PDropApp {
   }
 
   private async handleSignalingMessage(from: string, msg: RTCSignalingMessage): Promise<void> {
+    if (msg.type === 'connection-request') {
+      await this.handleConnectionRequest(from, msg);
+      return;
+    }
+
+    if (msg.type === 'connection-response') {
+      this.handleConnectionResponse(msg);
+      return;
+    }
+
+    if (msg.type === 'media-request') {
+      await this.handleMediaRequest(from, msg);
+      return;
+    }
+
+    if (msg.type === 'media-response') {
+      this.handleMediaResponse(msg);
+      return;
+    }
+
+    if (msg.type === 'media-stop') {
+      this.handleRemoteMediaStop(from);
+      return;
+    }
+
     if (msg.fileTransferId === 'media') {
       await this.handleMediaSignaling(from, msg);
       return;
@@ -372,15 +408,79 @@ class P2PDropApp {
     peer.transport = sharedTransport;
   }
 
-  private async connectToPeer(peerId: string): Promise<void> {
+  private async connectToPeer(peerId: string): Promise<boolean> {
     const peer = this.peers.get(peerId);
-    if (!peer) return;
+    if (!peer) return false;
+
+    if (peer.connection?.connected) {
+      showNotification(`Already connected to ${peer.device.deviceName}`, 'info');
+      return true;
+    }
+
+    const accepted = await this.requestPeerConnection(peerId);
+    if (!accepted) {
+      showNotification(`${peer.device.deviceName} rejected the connection request`, 'warning');
+      return false;
+    }
 
     if (!peer.connection) {
       this.createPeerConnection(peerId, true);
     }
 
     await peer.connection!.createOffer();
+    return true;
+  }
+
+  private async requestPeerConnection(peerId: string): Promise<boolean> {
+    const requestId = crypto.randomUUID();
+    const peer = this.peers.get(peerId);
+    if (!peer) return false;
+
+    const accepted = await new Promise<boolean>((resolve) => {
+      const timeout = window.setTimeout(() => {
+        this.pendingConnectionResponses.delete(requestId);
+        resolve(false);
+      }, 30000);
+      this.pendingConnectionResponses.set(requestId, (value) => {
+        window.clearTimeout(timeout);
+        resolve(value);
+      });
+      this.sendConnectionSignal(peerId, { type: 'connection-request', requestId });
+    });
+
+    return accepted;
+  }
+
+  private async handleConnectionRequest(peerId: string, msg: RTCSignalingMessage): Promise<void> {
+    const peer = this.peers.get(peerId);
+    if (!peer || !msg.requestId) return;
+
+    const accepted = await showActionRequest(
+      'طلب اتصال',
+      `${peer.device.deviceName} يريد الاتصال بجهازك. هل تريد القبول؟`,
+      'قبول',
+      'رفض'
+    );
+
+    this.sendConnectionSignal(peerId, {
+      type: 'connection-response',
+      requestId: msg.requestId,
+      accepted,
+      reason: accepted ? undefined : 'rejected',
+    });
+  }
+
+  private handleConnectionResponse(msg: RTCSignalingMessage): void {
+    if (!msg.requestId) return;
+    const resolver = this.pendingConnectionResponses.get(msg.requestId);
+    if (!resolver) return;
+    this.pendingConnectionResponses.delete(msg.requestId);
+    resolver(Boolean(msg.accepted));
+  }
+
+  private sendConnectionSignal(peerId: string, msg: RTCSignalingMessage): void {
+    this.localSignaling?.sendSignaling(peerId, msg);
+    this.wsSignaling?.sendSignaling(peerId, msg);
   }
 
   private async startMedia(peerId: string, mode: 'voice' | 'video' | 'screen'): Promise<void> {
@@ -391,16 +491,37 @@ class P2PDropApp {
     }
 
     try {
+      if (!peer.connection?.connected) {
+        const connected = await this.connectToPeer(peerId);
+        if (!connected) return;
+        await this.waitForPeerConnection(peer);
+      }
+
+      if (!peer.connection?.connected) {
+        showNotification('Could not connect to peer', 'error');
+        return;
+      }
+
       this.closeLocalMedia(peerId);
       this.localMediaStream = await this.requestMediaStream(mode);
       this.mediaMode = mode;
+      this.activeMediaPeerId = peerId;
+      updateMediaRoom(this.localMediaStream, this.remoteMediaStreams.get(peerId) ?? null, mode, peer.device.deviceName, peerId);
+
+      const accepted = await this.requestMediaPermission(peerId, mode);
+      if (!accepted) {
+        this.closeLocalMedia(peerId);
+        updateMediaRoom(null, null, null, peer.device.deviceName, peerId);
+        showNotification(`${peer.device.deviceName} rejected the ${mode} call`, 'warning');
+        return;
+      }
 
       const pc = this.ensureMediaConnection(peerId);
-      this.localMediaStream.getTracks().forEach(track => pc.addTrack(track, this.localMediaStream!));
+      this.addLocalTracksToMediaConnection(pc);
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       this.sendMediaSignal(peerId, { type: 'offer', sdp: offer.sdp, fileTransferId: 'media' });
-      updateMediaRoom(this.localMediaStream, this.remoteMediaStreams.get(peerId) ?? null, mode, peer.device.deviceName);
+      updateMediaRoom(this.localMediaStream, this.remoteMediaStreams.get(peerId) ?? null, mode, peer.device.deviceName, peerId);
     } catch (error) {
       this.closeLocalMedia(peerId);
       showNotification(this.getMediaErrorMessage(error, mode), 'error');
@@ -409,17 +530,36 @@ class P2PDropApp {
   }
 
   private stopMedia(peerId: string): void {
+    this.sendMediaSignal(peerId, { type: 'media-stop' });
     this.closeLocalMedia(peerId);
-    updateMediaRoom(null, null, null, this.peers.get(peerId)?.device.deviceName ?? '');
+    updateMediaRoom(null, null, null, this.peers.get(peerId)?.device.deviceName ?? '', peerId);
   }
 
   private closeLocalMedia(peerId: string): void {
     this.localMediaStream?.getTracks().forEach(track => track.stop());
     this.localMediaStream = null;
     this.mediaMode = null;
+    if (this.activeMediaPeerId === peerId) {
+      this.activeMediaPeerId = null;
+    }
     this.mediaConnections.get(peerId)?.close();
     this.mediaConnections.delete(peerId);
     this.remoteMediaStreams.delete(peerId);
+  }
+
+  private async waitForPeerConnection(peer: PeerState): Promise<void> {
+    await new Promise<void>((resolve) => {
+      const check = window.setInterval(() => {
+        if (peer.connection?.connected) {
+          window.clearInterval(check);
+          resolve();
+        }
+      }, 100);
+      window.setTimeout(() => {
+        window.clearInterval(check);
+        resolve();
+      }, 10000);
+    });
   }
 
   private async requestMediaStream(mode: 'voice' | 'video' | 'screen'): Promise<MediaStream> {
@@ -493,9 +633,11 @@ class P2PDropApp {
 
     pc.ontrack = (event) => {
       const stream = this.remoteMediaStreams.get(peerId) ?? new MediaStream();
-      stream.addTrack(event.track);
+      if (!stream.getTracks().some(track => track.id === event.track.id)) {
+        stream.addTrack(event.track);
+      }
       this.remoteMediaStreams.set(peerId, stream);
-      updateMediaRoom(this.localMediaStream, stream, this.mediaMode, this.peers.get(peerId)?.device.deviceName ?? '');
+      updateMediaRoom(this.localMediaStream, stream, this.mediaMode, this.peers.get(peerId)?.device.deviceName ?? '', peerId);
     };
 
     this.mediaConnections.set(peerId, pc);
@@ -506,7 +648,7 @@ class P2PDropApp {
     const pc = this.ensureMediaConnection(peerId);
     if (msg.type === 'offer') {
       await pc.setRemoteDescription({ type: 'offer', sdp: msg.sdp });
-      this.localMediaStream?.getTracks().forEach(track => pc.addTrack(track, this.localMediaStream!));
+      this.addLocalTracksToMediaConnection(pc);
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       this.sendMediaSignal(peerId, { type: 'answer', sdp: answer.sdp, fileTransferId: 'media' });
@@ -515,6 +657,83 @@ class P2PDropApp {
     } else if (msg.type === 'ice-candidate' && msg.candidate) {
       await pc.addIceCandidate(msg.candidate);
     }
+  }
+
+  private async requestMediaPermission(peerId: string, mode: 'voice' | 'video' | 'screen'): Promise<boolean> {
+    const requestId = crypto.randomUUID();
+
+    return new Promise<boolean>((resolve) => {
+      const timeout = window.setTimeout(() => {
+        this.pendingMediaResponses.delete(requestId);
+        resolve(false);
+      }, 45000);
+      this.pendingMediaResponses.set(requestId, (value) => {
+        window.clearTimeout(timeout);
+        resolve(value);
+      });
+      this.sendMediaSignal(peerId, { type: 'media-request', requestId, mode });
+    });
+  }
+
+  private async handleMediaRequest(peerId: string, msg: RTCSignalingMessage): Promise<void> {
+    const peer = this.peers.get(peerId);
+    if (!peer || !msg.requestId || !msg.mode) return;
+
+    const accepted = await showActionRequest(
+      'طلب مكالمة',
+      `${peer.device.deviceName} يريد بدء ${this.getMediaModeLabel(msg.mode)}. هل تريد القبول؟`,
+      'قبول',
+      'رفض'
+    );
+
+    if (!accepted) {
+      this.sendMediaSignal(peerId, { type: 'media-response', requestId: msg.requestId, accepted: false, mode: msg.mode, reason: 'rejected' });
+      return;
+    }
+
+    try {
+      this.closeLocalMedia(peerId);
+      this.localMediaStream = await this.requestMediaStream(msg.mode);
+      this.mediaMode = msg.mode;
+      this.activeMediaPeerId = peerId;
+      updateMediaRoom(this.localMediaStream, null, msg.mode, peer.device.deviceName, peerId);
+      this.sendMediaSignal(peerId, { type: 'media-response', requestId: msg.requestId, accepted: true, mode: msg.mode });
+    } catch (error) {
+      this.closeLocalMedia(peerId);
+      this.sendMediaSignal(peerId, { type: 'media-response', requestId: msg.requestId, accepted: false, mode: msg.mode, reason: 'media-unavailable' });
+      showNotification(this.getMediaErrorMessage(error, msg.mode), 'error');
+    }
+  }
+
+  private handleMediaResponse(msg: RTCSignalingMessage): void {
+    if (!msg.requestId) return;
+    const resolver = this.pendingMediaResponses.get(msg.requestId);
+    if (!resolver) return;
+    this.pendingMediaResponses.delete(msg.requestId);
+    resolver(Boolean(msg.accepted));
+  }
+
+  private handleRemoteMediaStop(peerId: string): void {
+    const peerName = this.peers.get(peerId)?.device.deviceName ?? '';
+    this.closeLocalMedia(peerId);
+    updateMediaRoom(null, null, null, peerName, peerId);
+    showNotification(`${peerName} ended the call`, 'info');
+  }
+
+  private addLocalTracksToMediaConnection(pc: RTCPeerConnection): void {
+    if (!this.localMediaStream) return;
+    const senderTrackIds = new Set(pc.getSenders().map(sender => sender.track?.id).filter(Boolean));
+    for (const track of this.localMediaStream.getTracks()) {
+      if (!senderTrackIds.has(track.id)) {
+        pc.addTrack(track, this.localMediaStream);
+      }
+    }
+  }
+
+  private getMediaModeLabel(mode: 'voice' | 'video' | 'screen'): string {
+    if (mode === 'voice') return 'مكالمة صوتية';
+    if (mode === 'screen') return 'مشاركة شاشة';
+    return 'مكالمة فيديو';
   }
 
   private sendMediaSignal(peerId: string, msg: RTCSignalingMessage): void {
@@ -531,20 +750,10 @@ class P2PDropApp {
 
     // Ensure connection exists
     if (!peer.connection || !peer.connection.connected) {
-      await this.connectToPeer(peerId);
+      const connected = await this.connectToPeer(peerId);
+      if (!connected) return;
       // Wait for connection
-      await new Promise<void>((resolve) => {
-        const check = setInterval(() => {
-          if (peer.connection?.connected) {
-            clearInterval(check);
-            resolve();
-          }
-        }, 100);
-        setTimeout(() => {
-          clearInterval(check);
-          resolve();
-        }, 10000);
-      });
+      await this.waitForPeerConnection(peer);
     }
 
     if (!peer.connection?.connected) {
