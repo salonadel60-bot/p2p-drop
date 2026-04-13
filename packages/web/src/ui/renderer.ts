@@ -41,8 +41,9 @@ const i18n: Record<string, Record<string, string>> = {
     scanning: 'Scanning',
     noDevices: 'Looking for nearby devices...',
     openHint: 'Open Kareem 🚀⚡🚀 Hamza in another tab or device',
-    dropTitle: 'Drag & drop files here',
-    dropHint: 'or click to select files',
+    dropTitle: 'Drop files here or tap to select',
+    dropHint: 'Supports all file types · drag & drop or click',
+    dropHintFiles: 'Add more files',
     transfers: 'Transfers',
     pairing: 'Pairing',
     scanConnect: 'Scan to connect',
@@ -58,7 +59,7 @@ const i18n: Record<string, Record<string, string>> = {
     stealthMode: 'Stealth Mode',
     stealthDesc: 'Hide from radar — other devices won\'t see you',
     close: 'Close',
-    selectPeer: 'Please select a device first',
+    selectPeer: 'Please select a device on the radar to send',
     me: 'YOU',
     connected: 'Connected',
     available: 'Available',
@@ -68,6 +69,12 @@ const i18n: Record<string, Record<string, string>> = {
     to: 'to',
     from: 'from',
     rejected: 'rejected the transfer',
+    filesReady: 'file(s) selected',
+    readyToSend: 'Now tap a device on the radar to send',
+    clearFiles: 'Clear',
+    file: 'file',
+    files: 'files',
+    total: 'total',
   },
   ar: {
     title: 'Kareem 🚀⚡🚀 Hamza',
@@ -75,8 +82,9 @@ const i18n: Record<string, Record<string, string>> = {
     scanning: 'جاري المسح',
     noDevices: 'جاري البحث عن الأجهزة القريبة...',
     openHint: 'افتح Kareem 🚀⚡🚀 Hamza في تبويب أو جهاز آخر',
-    dropTitle: 'اسحب وأفلت الملفات هنا',
-    dropHint: 'أو انقر لاختيار الملفات',
+    dropTitle: 'اسحب الملفات هنا أو اضغط لاختيارها',
+    dropHint: 'يدعم جميع أنواع الملفات · سحب وإفلات أو ضغط',
+    dropHintFiles: 'إضافة المزيد من الملفات',
     transfers: 'عمليات النقل',
     pairing: 'الاقتران',
     scanConnect: 'امسح للاتصال',
@@ -92,7 +100,7 @@ const i18n: Record<string, Record<string, string>> = {
     stealthMode: 'وضع التخفي',
     stealthDesc: 'الاختفاء من الرادار — الأجهزة الأخرى لن تراك',
     close: 'إغلاق',
-    selectPeer: 'الرجاء اختيار جهاز أولاً',
+    selectPeer: 'اختر جهازاً على الرادار لإرسال الملفات',
     me: 'أنت',
     connected: 'متصل',
     available: 'متاح',
@@ -102,6 +110,12 @@ const i18n: Record<string, Record<string, string>> = {
     to: 'إلى',
     from: 'من',
     rejected: 'رفض النقل',
+    filesReady: 'ملف/ملفات محددة',
+    readyToSend: 'اضغط على جهاز في الرادار لإرسال الملفات',
+    clearFiles: 'مسح',
+    file: 'ملف',
+    files: 'ملفات',
+    total: 'إجمالي',
   },
 };
 
@@ -128,11 +142,16 @@ const ICON_LOCK = `<svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height
 const ICON_SHIELD = `<svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`;
 const ICON_GHOST = `<svg viewBox="0 0 24 24"><path d="M9 10h.01M15 10h.01M12 2a8 8 0 0 0-8 8v12l3-3 2.5 2.5L12 19l2.5 2.5L17 19l3 3V10a8 8 0 0 0-8-8z"/></svg>`;
 const ICON_DOWNLOAD_FOLDER = `<svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><polyline points="12 11 12 17"/><polyline points="9 14 12 17 15 14"/></svg>`;
+const ICON_CHECK_CIRCLE = `<svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
+const ICON_FILE = `<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`;
+const ICON_X = `<svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+const ICON_PLUS = `<svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
 
 /* ═══════════════════════════════════════
    STATE
    ═══════════════════════════════════════ */
 let selectedPeerId: string | null = null;
+let pendingFiles: File[] = [];
 let callbacks: UICallbacks;
 let currentPeers: PeerEntry[] = [];
 let radarAnimId: number | null = null;
@@ -700,9 +719,16 @@ function renderRadarDevices(): void {
       selectedPeerId = peerId;
       callbacks.onPeerClick(peerId);
 
-      // Update selection
+      // Update selection visuals
       container.querySelectorAll('.radar-device').forEach(d => d.classList.remove('selected'));
       el.classList.add('selected');
+
+      // If files are pending, send them now
+      if (pendingFiles.length > 0) {
+        callbacks.onFilesSelected([...pendingFiles], peerId);
+        pendingFiles = [];
+        setTimeout(renderDropZoneContent, 300);
+      }
     });
   });
 }
@@ -855,12 +881,107 @@ function setupFileInput(): void {
   });
 }
 
-function handleFilesSelected(files: FileList): void {
-  if (!selectedPeerId) {
-    showNotification(t('selectPeer'), 'warning');
-    return;
+/* ═══════════════════════════════════════
+   PENDING FILES — queue files before peer is selected
+   ═══════════════════════════════════════ */
+
+function getFileTypeIcon(file: File): string {
+  const mime = file.type;
+  if (mime.startsWith('image/')) return `<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;
+  if (mime.startsWith('video/')) return `<svg viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>`;
+  if (mime.startsWith('audio/')) return `<svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`;
+  if (mime === 'application/pdf') return `<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>`;
+  if (mime.includes('zip') || mime.includes('rar') || mime.includes('archive')) return `<svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>`;
+  return ICON_FILE;
+}
+
+function renderDropZoneContent(): void {
+  const content = document.querySelector('.drop-zone-content') as HTMLElement | null;
+  const dropZone = document.getElementById('drop-zone');
+  if (!content) return;
+
+  if (pendingFiles.length === 0) {
+    dropZone?.classList.remove('has-files');
+    content.innerHTML = `
+      <div class="drop-icon">${ICON_UPLOAD}</div>
+      <p>${t('dropTitle')}</p>
+      <p class="hint">${t('dropHint')}</p>
+    `;
+  } else {
+    dropZone?.classList.add('has-files');
+    const totalSize = pendingFiles.reduce((sum, f) => sum + f.size, 0);
+    const countLabel = `${pendingFiles.length} ${pendingFiles.length === 1 ? t('file') : t('files')}`;
+    const maxShow = 4;
+    const shown = pendingFiles.slice(0, maxShow);
+    const rest = pendingFiles.length - maxShow;
+
+    const fileItems = shown.map(f => `
+      <div class="pending-file-item">
+        <span class="pending-file-icon">${getFileTypeIcon(f)}</span>
+        <span class="pending-file-name">${escapeHtml(f.name)}</span>
+        <span class="pending-file-size">${formatSize(f.size)}</span>
+      </div>
+    `).join('');
+
+    const moreRow = rest > 0
+      ? `<div class="pending-more">+${rest} ${t('files')}</div>`
+      : '';
+
+    const statusLine = selectedPeerId
+      ? `<p class="pending-status-sending">⚡ ${t('readyToSend')}</p>`
+      : `<p class="pending-status">${t('readyToSend')}</p>`;
+
+    content.innerHTML = `
+      <div class="pending-header">
+        <div class="pending-check">${ICON_CHECK_CIRCLE}</div>
+        <div class="pending-summary">
+          <strong>${countLabel}</strong>
+          <span class="pending-total">${formatSize(totalSize)} ${t('total')}</span>
+        </div>
+        <div class="pending-actions">
+          <button class="pending-add-btn" id="pending-add-btn" title="${t('dropHintFiles')}">${ICON_PLUS}</button>
+          <button class="pending-clear-btn" id="pending-clear-btn" title="${t('clearFiles')}">${ICON_X}</button>
+        </div>
+      </div>
+      <div class="pending-file-list">${fileItems}${moreRow}</div>
+      ${statusLine}
+    `;
+
+    // Add more files
+    document.getElementById('pending-add-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const input = document.getElementById('file-input') as HTMLInputElement | null;
+      if (input) input.click();
+    });
+
+    // Clear all files
+    document.getElementById('pending-clear-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      pendingFiles = [];
+      renderDropZoneContent();
+    });
   }
-  callbacks.onFilesSelected(files, selectedPeerId);
+}
+
+function handleFilesSelected(files: FileList | File[]): void {
+  const arr = Array.from(files);
+  if (arr.length === 0) return;
+
+  // Accumulate — add new files to pending (avoid exact duplicates by name+size)
+  for (const f of arr) {
+    const isDup = pendingFiles.some(p => p.name === f.name && p.size === f.size);
+    if (!isDup) pendingFiles.push(f);
+  }
+
+  // Always show the files visually first
+  renderDropZoneContent();
+
+  // If a peer is already selected, send immediately
+  if (selectedPeerId && pendingFiles.length > 0) {
+    callbacks.onFilesSelected([...pendingFiles], selectedPeerId);
+    pendingFiles = [];
+    setTimeout(renderDropZoneContent, 300);
+  }
 }
 
 function escapeHtml(text: string): string {

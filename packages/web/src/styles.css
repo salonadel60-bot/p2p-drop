@@ -552,10 +552,17 @@ section h2::after {
   transform: scale(1.01);
 }
 
+.drop-zone.has-files {
+  border-color: var(--accent);
+  background: linear-gradient(135deg, rgba(168,85,247,0.07), rgba(124,58,237,0.04));
+  box-shadow: 0 0 0 1px rgba(168,85,247,0.25), var(--shadow-glow);
+}
+
 .drop-zone-content {
   position: relative;
   z-index: 1;
-  pointer-events: none;
+  pointer-events: auto;
+  width: 100%;
 }
 
 .drop-icon {
@@ -601,6 +608,192 @@ section h2::after {
 .hint {
   font-size: 0.72rem;
   color: var(--text-muted);
+}
+
+/* ─── Pending Files State ─── */
+.pending-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0 0.5rem 0;
+  margin-bottom: 0.5rem;
+}
+
+.pending-check {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(168,85,247,0.25), rgba(124,58,237,0.15));
+  border: 1.5px solid var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pending-check svg {
+  width: 18px;
+  height: 18px;
+  stroke: var(--accent);
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pending-summary {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  text-align: left;
+}
+
+[dir="rtl"] .pending-summary {
+  text-align: right;
+}
+
+.pending-summary strong {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.pending-total {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.pending-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.pending-add-btn,
+.pending-clear-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-base);
+  padding: 0;
+}
+
+.pending-add-btn svg,
+.pending-clear-btn svg {
+  width: 14px;
+  height: 14px;
+  stroke: var(--text-secondary);
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pending-add-btn:hover {
+  border-color: var(--accent);
+  background: var(--accent-glow);
+}
+
+.pending-add-btn:hover svg { stroke: var(--accent); }
+
+.pending-clear-btn:hover {
+  border-color: #ef4444;
+  background: rgba(239,68,68,0.1);
+}
+
+.pending-clear-btn:hover svg { stroke: #ef4444; }
+
+.pending-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  max-height: 120px;
+  overflow-y: auto;
+  margin-bottom: 0.6rem;
+}
+
+.pending-file-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 8px;
+  background: rgba(168,85,247,0.06);
+  border: 1px solid rgba(168,85,247,0.12);
+}
+
+.pending-file-icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+}
+
+.pending-file-icon svg {
+  width: 16px;
+  height: 16px;
+  stroke: var(--accent);
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pending-file-name {
+  flex: 1;
+  font-size: 0.78rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  text-align: left;
+}
+
+[dir="rtl"] .pending-file-name {
+  text-align: right;
+}
+
+.pending-file-size {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.pending-more {
+  font-size: 0.72rem;
+  color: var(--accent);
+  text-align: center;
+  padding: 0.2rem 0;
+  font-weight: 600;
+}
+
+.pending-status {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin: 0.3rem 0 0 0;
+  text-align: center;
+  animation: pulse-text 2s ease-in-out infinite;
+}
+
+.pending-status-sending {
+  font-size: 0.78rem;
+  color: var(--accent);
+  margin: 0.3rem 0 0 0;
+  text-align: center;
+  font-weight: 600;
+}
+
+@keyframes pulse-text {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; }
 }
 
 .select-link {
