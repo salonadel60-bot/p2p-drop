@@ -58,7 +58,7 @@ class P2PDropApp {
       onFilesSelected: (files, peerId) => this.sendFiles(files, peerId),
       onPeerClick: (peerId) => this.connectToPeer(peerId),
       onQRScanned: (data) => this.handleQRScanned(data),
-      onStartMedia: (peerId, mode) => this.startMedia(peerId, mode),
+      onStartMedia: (peerId, mode) => void this.startMedia(peerId, mode),
       onStopMedia: (peerId) => this.stopMedia(peerId),
     });
 
@@ -367,28 +367,84 @@ class P2PDropApp {
       return;
     }
 
-    this.localMediaStream?.getTracks().forEach(track => track.stop());
-    this.localMediaStream = mode === 'screen'
-      ? await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true })
-      : await navigator.mediaDevices.getUserMedia({ video: mode === 'video', audio: true });
-    this.mediaMode = mode;
+    try {
+      this.closeLocalMedia(peerId);
+      this.localMediaStream = await this.requestMediaStream(mode);
+      this.mediaMode = mode;
 
-    const pc = this.ensureMediaConnection(peerId);
-    this.localMediaStream.getTracks().forEach(track => pc.addTrack(track, this.localMediaStream!));
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    this.sendMediaSignal(peerId, { type: 'offer', sdp: offer.sdp, fileTransferId: 'media' });
-    updateMediaRoom(this.localMediaStream, this.remoteMediaStreams.get(peerId) ?? null, mode, peer.device.deviceName);
+      const pc = this.ensureMediaConnection(peerId);
+      this.localMediaStream.getTracks().forEach(track => pc.addTrack(track, this.localMediaStream!));
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      this.sendMediaSignal(peerId, { type: 'offer', sdp: offer.sdp, fileTransferId: 'media' });
+      updateMediaRoom(this.localMediaStream, this.remoteMediaStreams.get(peerId) ?? null, mode, peer.device.deviceName);
+    } catch (error) {
+      this.closeLocalMedia(peerId);
+      showNotification(this.getMediaErrorMessage(error, mode), 'error');
+      console.warn('[P2P Drop] Media start failed:', error);
+    }
   }
 
   private stopMedia(peerId: string): void {
+    this.closeLocalMedia(peerId);
+    updateMediaRoom(null, null, null, this.peers.get(peerId)?.device.deviceName ?? '');
+  }
+
+  private closeLocalMedia(peerId: string): void {
     this.localMediaStream?.getTracks().forEach(track => track.stop());
     this.localMediaStream = null;
     this.mediaMode = null;
     this.mediaConnections.get(peerId)?.close();
     this.mediaConnections.delete(peerId);
     this.remoteMediaStreams.delete(peerId);
-    updateMediaRoom(null, null, null, this.peers.get(peerId)?.device.deviceName ?? '');
+  }
+
+  private async requestMediaStream(mode: 'voice' | 'video' | 'screen'): Promise<MediaStream> {
+    if (!navigator.mediaDevices) {
+      throw new Error('media-devices-unavailable');
+    }
+
+    if (mode === 'screen') {
+      if (!navigator.mediaDevices.getDisplayMedia) {
+        throw new Error('screen-share-unavailable');
+      }
+      return navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+    }
+
+    if (mode === 'voice') {
+      return navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    }
+
+    try {
+      return await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    } catch (error) {
+      if (error instanceof DOMException && (error.name === 'NotFoundError' || error.name === 'OverconstrainedError')) {
+        return navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      }
+      throw error;
+    }
+  }
+
+  private getMediaErrorMessage(error: unknown, mode: 'voice' | 'video' | 'screen'): string {
+    if (error instanceof DOMException) {
+      if (error.name === 'NotAllowedError' || error.name === 'SecurityError') {
+        return 'Camera/microphone permission was blocked. Allow access from the browser and try again.';
+      }
+      if (error.name === 'NotFoundError' || error.name === 'OverconstrainedError') {
+        if (mode === 'voice') return 'No microphone was found on this device.';
+        if (mode === 'video') return 'No camera was found on this device.';
+        return 'Screen sharing is not available on this device.';
+      }
+      if (error.name === 'NotReadableError') {
+        return 'The camera or microphone is already being used by another app.';
+      }
+    }
+
+    if (error instanceof Error && error.message === 'screen-share-unavailable') {
+      return 'Screen sharing is not supported in this browser.';
+    }
+
+    return 'Could not start media. Check your camera/microphone and browser permissions.';
   }
 
   private ensureMediaConnection(peerId: string): RTCPeerConnection {
