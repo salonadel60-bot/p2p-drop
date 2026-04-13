@@ -20,7 +20,7 @@ This is a **npm monorepo** using npm workspaces with the following packages:
 
 ## Workflows
 - **Start application** — Runs the web frontend dev server (`npm run dev:web`) on port 5000
-- **Signaling Server** — Runs the WebSocket signaling server (`npm run dev:signaling`) on port 8080
+- **Signaling Server** — Runs the WebSocket signaling server (`npm run dev:signaling`) on port 3001
 
 ## Key Commands
 ```bash
@@ -29,8 +29,13 @@ npm run build:core       # Build shared core library (required before other buil
 npm run build:web        # Build web frontend
 npm run build:signaling  # Build signaling server
 npm run dev:web          # Start web dev server (port 5000)
-npm run dev:signaling    # Start signaling server (port 8080)
+npm run dev:signaling    # Start signaling server (port 3001)
 ```
+
+## Replit Migration Status
+- Dependencies have been installed for the npm workspace.
+- The Replit workflows run the web app and signaling server separately.
+- Vite is configured for Replit preview access with `host: '0.0.0.0'` and `allowedHosts: true`.
 
 ## Deployment
 - Configured as a **static** deployment
