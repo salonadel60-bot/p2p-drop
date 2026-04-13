@@ -10,7 +10,7 @@ import {
   type HandshakeResponse,
   PROTOCOL_VERSION,
   getOrCreateIdentity,
-  LocalStorageAdapter,
+  SessionStorageAdapter,
   generateSessionKeyPair,
   computeOptimalChunkSize,
   createFileMetadata,
@@ -45,7 +45,7 @@ class P2PDropApp {
 
   async init(): Promise<void> {
     // Get or create device identity
-    this.identity = await getOrCreateIdentity(new LocalStorageAdapter());
+    this.identity = await getOrCreateIdentity(new SessionStorageAdapter());
 
     // Render the UI
     renderUI(this.identity, {
@@ -184,7 +184,9 @@ class P2PDropApp {
       this.wsSignaling?.sendSignaling(targetId, msg);
     };
 
-    const transport = new WebRTCTransport(null as unknown as WebRTCPeerConnection);
+    // Use a shared transport reference that both the connection callbacks
+    // and the peer state point to, so incoming events reach FileSender/FileReceiver.
+    let sharedTransport: WebRTCTransport | null = null;
 
     const connection = new WebRTCPeerConnection(
       this.identity,
@@ -193,8 +195,8 @@ class P2PDropApp {
       {
         onHandshakeRequest: (req) => this.handleHandshakeRequest(peerId, req),
         onHandshakeResponse: (res) => this.handleHandshakeResponse(peerId, res),
-        onChunk: (chunk, data) => transport.handleIncomingChunk(chunk, data),
-        onControl: (msg) => transport.handleIncomingControl(msg),
+        onChunk: (chunk, data) => sharedTransport?.handleIncomingChunk(chunk, data),
+        onControl: (msg) => sharedTransport?.handleIncomingControl(msg),
         onConnected: () => {
           showNotification(`Connected to ${peer.device.deviceName}`, 'success');
           updatePeerList(Array.from(this.peers.entries()).map(([id, state]) => ({
@@ -213,10 +215,10 @@ class P2PDropApp {
       sendSignaling
     );
 
-    // Re-create transport with actual connection
-    const realTransport = new WebRTCTransport(connection);
+    // Create the single transport instance bound to the real connection
+    sharedTransport = new WebRTCTransport(connection);
     peer.connection = connection;
-    peer.transport = realTransport;
+    peer.transport = sharedTransport;
   }
 
   private async connectToPeer(peerId: string): Promise<void> {

@@ -93,7 +93,7 @@ class MemoryStorage implements IdentityStorage {
   }
 }
 
-/** LocalStorage adapter for web */
+/** LocalStorage adapter for web — shared across tabs (use for persistent settings) */
 export class LocalStorageAdapter implements IdentityStorage {
   async get(key: string): Promise<string | null> {
     if (typeof localStorage === 'undefined') return null;
@@ -102,6 +102,18 @@ export class LocalStorageAdapter implements IdentityStorage {
   async set(key: string, value: string): Promise<void> {
     if (typeof localStorage === 'undefined') return;
     localStorage.setItem(`p2p-drop:${key}`, value);
+  }
+}
+
+/** SessionStorage adapter for web — unique per tab (use for per-tab identity) */
+export class SessionStorageAdapter implements IdentityStorage {
+  async get(key: string): Promise<string | null> {
+    if (typeof sessionStorage === 'undefined') return null;
+    return sessionStorage.getItem(`p2p-drop:${key}`);
+  }
+  async set(key: string, value: string): Promise<void> {
+    if (typeof sessionStorage === 'undefined') return;
+    sessionStorage.setItem(`p2p-drop:${key}`, value);
   }
 }
 
