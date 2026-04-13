@@ -64,5 +64,4 @@ externalPort = 8080
 [deployment]
 deploymentTarget = "autoscale"
 build = ["npm", "run", "build:prod"]
-publicDir = "packages/web/dist"
 run = ["npm", "run", "start:prod"]
