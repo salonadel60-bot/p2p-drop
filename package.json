@@ -1,0 +1,45 @@
+{
+  "name": "p2p-drop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cross-platform P2P file transfer ecosystem - AirDrop + SHAREit + Snapdrop + Nearby Share",
+  "workspaces": [
+    "packages/core",
+    "packages/web",
+    "packages/desktop",
+    "packages/signaling"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "build:prod": "npm run build:core && npm run build:web && npm run build:signaling",
+    "build:core": "npm run build -w packages/core",
+    "build:web": "npm run build -w packages/web",
+    "build:desktop": "npm run build -w packages/desktop",
+    "build:signaling": "npm run build -w packages/signaling",
+    "dev:web": "npm run dev -w packages/web",
+    "dev:desktop": "npm run dev -w packages/desktop",
+    "dev:signaling": "npm run dev -w packages/signaling",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "start:prod": "npm run start -w packages/signaling"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@types/express": "^4.17.25",
+    "@types/multer": "^1.4.13",
+    "@types/node": "^22.19.17",
+    "@types/qrcode": "^1.5.6",
+    "@types/ws": "^8.18.1",
+    "bonjour-service": "^1.3.0",
+    "electron": "^33.4.11",
+    "express": "^4.22.1",
+    "jsqr": "^1.4.0",
+    "multer": "^1.4.5-lts.1",
+    "qrcode": "^1.5.4",
+    "typescript": "^5.9.3",
+    "vite": "^5.4.21",
+    "ws": "^8.20.0"
+  }
+}

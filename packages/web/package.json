@@ -1,0 +1,23 @@
+{
+  "name": "@p2p-drop/web",
+  "version": "1.0.0",
+  "description": "P2P Drop Web App - WebRTC-based file transfer with Snapdrop-like UI",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b --force && vite build",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@p2p-drop/core": "1.0.0",
+    "jsqr": "^1.4.0",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@types/qrcode": "^1.5.5",
+    "typescript": "^5.5.0",
+    "vite": "^5.4.0"
+  }
+}

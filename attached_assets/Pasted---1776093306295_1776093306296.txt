@@ -1,0 +1,104 @@
+اضف زر لفتح قارئ بار كود للنظام بحيث امسح الكود اجد الجهاز متصل تلقائيا بدون تحويل لصفحات او استخدام برامج خارجيه اعتمد علي ذاكرتك وانجز المهمه
+
+6 minutes ago
+
+Planning QR scanner integration (16 seconds)
+فاهمك تماماً — قارئ QR مدمج يفتح الكاميرا مباشرةً في التطبيق، يمسح الكود ويتصل بالجهاز تلقائياً. دعني أفهم أولاً بنية الـ QR الحالية في التطبيق:
+
+
+Show less
+
+Ran rg
+
+Ran rg
+
+Planning URL structure analysis
+Now let me check what the pairing URL looks like and how connecting via URL works:
+
+
+17 actions
+Now I have the full picture. I'll build the QR scanner from scratch using jsQR (pure browser, no external apps) with the camera API. The scanner will:
+
+Open the camera in a modal
+Scan frames and detect QR codes
+Extract the peer's signaling server URL from the code
+Connect automatically without navigating anywhere
+Let me install jsQR and implement this:
+
+
+Show less
+
+Ran cd
+
+Planning QR scanner integration
+jsQR is installed. Now let me implement the full QR scanner.
+
+Here's what I'll do:
+
+Update UICallbacks in renderer.ts to add onQRScanned
+Add a QR scanner button near the pairing section
+Add the full scanner modal with camera feed
+Add scanning logic using jsQR
+Update app.ts to handle the scanned data and auto-connect
+Let me start with the app.ts changes to add the QR scanner logic.
+
+Good. Now update app.ts — add getSignalingURL(), update the QR generation to embed the signaling URL, and add the handleQRScanned() auto-connect handler:
+
+
+Show less
+
+Opened packages/web/src/app.ts
+
+Updating app.ts structure
+Now let me update app.ts. I need to:
+
+Add parseQRData import from @p2p-drop/core
+Update renderUI callback to include onQRScanned
+Add getSignalingURL() method
+Update generateQRCode() to include signaling URL5. Add handleQRScanned(data: string) method
+Add connectToSignalingServer(url: string) method (or update the existing one)Let me read more of app.ts to understand the full structure.
+
+Opened packages/web/src/app.ts
+
+Planning signaling server URL logic (14 seconds)
+Now I have enough context. Let me implement the QR scanner feature. I need to:1. Update app.ts: - Import parseQRData from @p2p-drop/core
+
+Add onQRScanned callback to UICallbacks
+Add getSignalingURL() method - derives the signaling server URL
+Update setupPairing() to embed signaling URL in QR data
+Add handleQRScanned(data: string) method - Add connectToSignalingServer(url: string) method2. Update renderer.ts:
+Add onQRScanned to UICallbacks interface
+Add scan QR button to pairing section
+Add scanner modal with camera feed
+Add jsQR scanning loop3. Update styles.css with scanner modal styles. Now I'm working through the signaling URL detection logic—checking for explicit query parameters first, then falling back to localhost for development, and handling Replit's deployment environment where I'll need to infer the signaling server from the current domain.
+Since Replit's proxy doesn't expose arbitrary ports on custom domains by default, I'll keep it simple and let users override the signaling URL via query parameter, then embed the resolved URL directly into the QR code so peers can connect without additional configuration.
+
+Now I'll implement all three changes in parallel — app.ts, renderer.ts, and styles.css:
+
+
+Show less
+
+Edited packages/web/src/app.ts
+
+Planning UI rendering and signaling.
+Now update the renderUI call to include onQRScanned, add getSignalingURL() method, update setupPairing() to embed signaling URL, and add handleQRScanned() method.
+
+Now add the QR scan callback and update setupPairing in app.ts:
+
+
+Show less
+
+Edited packages/web/src/app.ts
+
+Planning setupPairing updates
+Now I need to update setupPairing() to include signaling URL and add the new methods. Let me read a bit more of app.ts to understand what comes after generateQRCode().
+
+Now update setupPairing() to embed the signaling URL in the QR, and add the new handler methods:
+
+
+Show less
+
+Opened packages/web/src/app.ts
+
+Planning new method integration
+Now I'll replace setupPairing() and add the new methods. Let me also add the getSignalingURL() private method and the handleQRScanned() method.

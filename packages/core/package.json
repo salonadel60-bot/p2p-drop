@@ -1,0 +1,49 @@
+{
+  "name": "@p2p-drop/core",
+  "version": "1.0.0",
+  "description": "Shared core for P2P file transfer - protocol, transfer engine, crypto, discovery",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./protocol": {
+      "import": "./dist/protocol/index.js",
+      "require": "./dist/protocol/index.js",
+      "types": "./dist/protocol/index.d.ts"
+    },
+    "./transfer": {
+      "import": "./dist/transfer/index.js",
+      "require": "./dist/transfer/index.js",
+      "types": "./dist/transfer/index.d.ts"
+    },
+    "./crypto": {
+      "import": "./dist/crypto/index.js",
+      "require": "./dist/crypto/index.js",
+      "types": "./dist/crypto/index.d.ts"
+    },
+    "./discovery": {
+      "import": "./dist/discovery/index.js",
+      "require": "./dist/discovery/index.js",
+      "types": "./dist/discovery/index.d.ts"
+    },
+    "./identity": {
+      "import": "./dist/identity/index.js",
+      "require": "./dist/identity/index.js",
+      "types": "./dist/identity/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b --force",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "typescript": "^5.5.0"
+  }
+}
